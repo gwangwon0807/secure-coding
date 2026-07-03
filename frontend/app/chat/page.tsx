@@ -4,7 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { ReportForm } from "@/components/report-form";
 import { apiFetch } from "@/lib/api";
+import { hasAccessToken } from "@/lib/auth";
 import { formatItemStatus, getItemStatusClassName } from "@/lib/labels";
 
 type ChatRoom = {
@@ -55,9 +57,13 @@ export default function ChatPage() {
 
   useEffect(() => {
     const preferredRoomId = typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("room")) || null : null;
-    apiFetch<Me>("/api/v1/auth/me")
-      .then(setMe)
-      .catch(() => setMe(null));
+    if (hasAccessToken()) {
+      apiFetch<Me>("/api/v1/auth/me")
+        .then(setMe)
+        .catch(() => setMe(null));
+    } else {
+      setMe(null);
+    }
     loadRooms(preferredRoomId)
       .catch((err) => setError(err instanceof Error ? err.message : "채팅 목록을 불러오지 못했습니다."));
   }, []);
@@ -197,6 +203,21 @@ export default function ChatPage() {
               <Link className="button subtle" href={`/items/${selectedRoom.item.id}`}>
                 상품 보기
               </Link>
+              {roomDetail?.opponent?.id ? (
+                <Link
+                  className="button subtle"
+                  href={`/wallet?recipientId=${roomDetail.opponent.id}&chatRoomId=${selectedRoom.id}${transaction ? `&transactionId=${transaction.id}` : ""}`}
+                >
+                  송금
+                </Link>
+              ) : null}
+              {roomDetail?.opponent?.id ? (
+                <ReportForm
+                  options={[
+                    { label: "사용자 신고", targetType: "USER", targetId: roomDetail.opponent.id },
+                  ]}
+                />
+              ) : null}
               <button className="button subtle danger" type="button" onClick={handleDeleteRoom}>
                 채팅 삭제
               </button>

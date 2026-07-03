@@ -2,10 +2,12 @@ from app.models.audit_log import AuditLog
 from app.models.block import Block
 from app.models.category import Category
 from app.models.chat import ChatRoom, Message
+from app.models.community import CommunityComment, CommunityPost, CommunityPostImage
 from app.models.item import Item
 from app.models.item_image import ItemImage
 from app.models.report import Report
 from app.models.transaction import Transaction
+from app.models.transfer import Transfer, Wallet, WalletLedger
 from app.models.user import User
 
 __all__ = [
@@ -13,10 +15,16 @@ __all__ = [
     "Block",
     "Category",
     "ChatRoom",
+    "CommunityComment",
+    "CommunityPost",
+    "CommunityPostImage",
     "Item",
     "ItemImage",
     "Message",
     "Report",
     "Transaction",
+    "Transfer",
     "User",
+    "Wallet",
+    "WalletLedger",
 ]

@@ -16,6 +16,10 @@ class AdminItemStatusUpdateRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class AdminModerationRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class AdminUserListEntry(BaseModel):
     id: int
     email: str
@@ -25,6 +29,7 @@ class AdminUserListEntry(BaseModel):
     trust_score: int
     trade_count: int
     report_count: int
+    needs_review: bool = False
     created_at: datetime
 
 
@@ -121,6 +126,64 @@ class AdminTransactionListEntry(BaseModel):
 
 class AdminTransactionListResponse(BaseModel):
     transactions: list[AdminTransactionListEntry]
+    pagination: PaginationSchema
+
+
+class AdminCommunityPostEntry(BaseModel):
+    id: int
+    title: str
+    author: dict
+    comment_count: int
+    report_count: int
+    created_at: datetime
+    deleted_at: datetime | None
+
+
+class AdminCommunityPostListResponse(BaseModel):
+    posts: list[AdminCommunityPostEntry]
+    pagination: PaginationSchema
+
+
+class AdminCommunityCommentEntry(BaseModel):
+    id: int
+    post_id: int
+    post_title: str | None
+    author: dict
+    content: str
+    report_count: int
+    created_at: datetime
+    deleted_at: datetime | None
+
+
+class AdminCommunityCommentListResponse(BaseModel):
+    comments: list[AdminCommunityCommentEntry]
+    pagination: PaginationSchema
+
+
+class AdminChatRoomEntry(BaseModel):
+    id: int
+    item: dict
+    buyer: dict
+    seller: dict
+    message_count: int
+    last_message_at: datetime | None
+    created_at: datetime
+
+
+class AdminChatRoomListResponse(BaseModel):
+    chat_rooms: list[AdminChatRoomEntry]
+    pagination: PaginationSchema
+
+
+class AdminChatMessageEntry(BaseModel):
+    id: int
+    sender: dict
+    content: str
+    created_at: datetime
+
+
+class AdminChatMessageListResponse(BaseModel):
+    messages: list[AdminChatMessageEntry]
     pagination: PaginationSchema
 
 

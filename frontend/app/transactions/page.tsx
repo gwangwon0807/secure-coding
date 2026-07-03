@@ -19,10 +19,12 @@ type Transaction = {
   accepted_at?: string | null;
   completed_at?: string | null;
 };
+type Me = { id: number };
 
 export default function TransactionsPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
   const [role, setRole] = useState("");
   const [error, setError] = useState("");
 
@@ -34,6 +36,7 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
+    apiFetch<Me>("/api/v1/auth/me").then(setMe).catch(() => setMe(null));
     loadTransactions(role)
       .catch((err) => setError(err instanceof Error ? err.message : "거래 내역을 불러오지 못했습니다."));
   }, [role]);
@@ -83,6 +86,15 @@ export default function TransactionsPage() {
               구매자 완료 {transaction.buyer_completed ? "완료" : "대기"} · 판매자 완료 {transaction.seller_completed ? "완료" : "대기"}
             </div>
             <div className="transaction-action-row" onClick={(event) => event.stopPropagation()}>
+              {me ? (
+                <button
+                  className="button subtle"
+                  type="button"
+                  onClick={() => router.push(`/wallet?recipientId=${me.id === transaction.seller.id ? transaction.buyer.id : transaction.seller.id}&transactionId=${transaction.id}`)}
+                >
+                  송금
+                </button>
+              ) : null}
               <button className="button subtle" type="button" onClick={() => router.push(`/items/${transaction.item.id}`)}>
                 상품 보기
               </button>

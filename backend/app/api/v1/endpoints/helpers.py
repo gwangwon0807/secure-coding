@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.block import Block
 from app.models.category import Category
 from app.models.chat import ChatRoom, Message
+from app.models.community import CommunityComment, CommunityPost
 from app.models.enums import ItemStatus, ReportTargetType, TransactionStatus, UserStatus
 from app.models.item import Item
 from app.models.item_image import ItemImage
@@ -112,6 +113,12 @@ def build_report_target_summary(db: Session, report: Report) -> str | None:
     if report.target_type == ReportTargetType.USER:
         user = db.get(User, report.target_id)
         return user.nickname if user else None
+    if report.target_type == ReportTargetType.COMMUNITY_POST:
+        post = db.get(CommunityPost, report.target_id)
+        return post.title if post else None
+    if report.target_type == ReportTargetType.COMMUNITY_COMMENT:
+        comment = db.get(CommunityComment, report.target_id)
+        return comment.content[:30] if comment else None
     if report.target_type == ReportTargetType.CHAT_ROOM:
         room = db.get(ChatRoom, report.target_id)
         if not room:

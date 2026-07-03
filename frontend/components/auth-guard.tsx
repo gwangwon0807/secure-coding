@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
+import { hasAccessToken } from "@/lib/auth";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -16,6 +17,11 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
   const [status, setStatus] = useState<"loading" | "ready">("loading");
 
   useEffect(() => {
+    if (!hasAccessToken()) {
+      const next = encodeURIComponent(pathname || "/");
+      router.replace(`/login?next=${next}`);
+      return;
+    }
     apiFetch("/api/v1/auth/me")
       .then(() => setStatus("ready"))
       .catch(() => {

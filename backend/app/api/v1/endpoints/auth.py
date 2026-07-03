@@ -64,7 +64,8 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if user.status.name == "SUSPENDED":
         raise HTTPException(status_code=403, detail="USER_SUSPENDED")
     _set_auth_cookies(response, user.id)
-    return {"user": user}
+    access = create_token(str(user.id), "access", settings.access_token_expire_minutes)
+    return {"user": user, "access_token": access}
 
 
 @router.post("/logout")

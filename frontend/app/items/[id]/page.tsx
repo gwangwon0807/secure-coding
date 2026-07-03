@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { ImageLightbox } from "@/components/image-lightbox";
+import { ReportForm } from "@/components/report-form";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
+import { hasAccessToken } from "@/lib/auth";
 import { formatItemStatus, getItemStatusClassName } from "@/lib/labels";
 
 type ItemDetail = {
@@ -26,14 +29,20 @@ export default function ItemDetailPage() {
   const [item, setItem] = useState<ItemDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState("");
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     apiFetch<ItemDetail>(`/api/v1/items/${params.id}`)
       .then(setItem)
       .catch((err) => setError(err instanceof Error ? err.message : "상품을 불러오지 못했습니다."));
-    apiFetch<Me>("/api/v1/auth/me")
-      .then(setMe)
-      .catch(() => setMe(null));
+    if (hasAccessToken()) {
+      apiFetch<Me>("/api/v1/auth/me")
+        .then(setMe)
+        .catch(() => setMe(null));
+    } else {
+      setMe(null);
+    }
   }, [params.id]);
 
   async function handleCreateChat() {
@@ -59,14 +68,44 @@ export default function ItemDetailPage() {
     return <div className="panel empty-state muted">상품 정보를 불러오는 중입니다.</div>;
   }
 
+  const activeImage = item.images[selectedImageIndex] ?? item.images[0];
+  const lightboxImages = item.images.map((image) => ({ src: image.image_url, alt: item.title }));
+
   return (
+    <>
     <div className="detail-layout">
       <section className="panel detail-panel">
-        {item.images[0] ? <img alt={item.title} className="detail-hero-image" src={`${API_BASE_URL}${item.images[0].image_url}`} /> : <div className="detail-hero-image" />}
+        {activeImage ? (
+          <div className="detail-hero-wrap">
+            <button className="image-open-button detail-hero-button" type="button" onClick={() => setLightboxOpen(true)}>
+              <img alt={item.title} className="detail-hero-image" src={`${API_BASE_URL}${activeImage.image_url}`} />
+            </button>
+            {item.images.length > 1 ? (
+              <>
+                <button
+                  className="image-slider-button prev"
+                  type="button"
+                  onClick={() => setSelectedImageIndex((prev) => (prev - 1 + item.images.length) % item.images.length)}
+                >
+                  이전
+                </button>
+                <button
+                  className="image-slider-button next"
+                  type="button"
+                  onClick={() => setSelectedImageIndex((prev) => (prev + 1) % item.images.length)}
+                >
+                  다음
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : <div className="detail-hero-image" />}
         {item.images.length > 1 ? (
           <div className="detail-thumb-row">
-            {item.images.map((image) => (
-              <img key={image.id} alt={item.title} className="mini-thumb" src={`${API_BASE_URL}${image.image_url}`} />
+            {item.images.map((image, index) => (
+              <button className={`mini-thumb-button ${selectedImageIndex === index ? "active" : ""}`} key={image.id} type="button" onClick={() => setSelectedImageIndex(index)}>
+                <img alt={item.title} className="mini-thumb" src={`${API_BASE_URL}${image.image_url}`} />
+              </button>
             ))}
           </div>
         ) : null}
@@ -96,9 +135,29 @@ export default function ItemDetailPage() {
             </>
           )}
         </div>
+        {!isOwner ? (
+          <div className="report-action-grid">
+            <ReportForm
+              options={[
+                { label: "상품 신고", targetType: "ITEM", targetId: item.id },
+                { label: "판매자 신고", targetType: "USER", targetId: item.seller.id },
+              ]}
+            />
+          </div>
+        ) : null}
         {error ? <div className="error-box">{error}</div> : null}
         <div className="detail-description">{item.description}</div>
       </aside>
     </div>
+    {lightboxOpen ? (
+      <ImageLightbox
+        images={lightboxImages}
+        currentIndex={selectedImageIndex}
+        onClose={() => setLightboxOpen(false)}
+        onPrev={() => setSelectedImageIndex((prev) => (prev - 1 + item.images.length) % item.images.length)}
+        onNext={() => setSelectedImageIndex((prev) => (prev + 1) % item.images.length)}
+      />
+    ) : null}
+    </>
   );
 }

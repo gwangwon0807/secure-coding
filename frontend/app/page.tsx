@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { ImageLightbox } from "@/components/image-lightbox";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
 import { formatItemStatus, getItemStatusClassName } from "@/lib/labels";
 
@@ -38,6 +39,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
     apiFetch<{ categories: Category[] }>("/api/v1/categories")
@@ -154,26 +156,33 @@ export default function HomePage() {
         ) : (
           <div className="product-grid">
             {items.map((item) => (
-              <Link className="panel product-card" href={`/items/${item.id}`} key={item.id}>
+              <div className="panel product-card" key={item.id}>
                 {item.thumbnail_url ? (
-                  <img alt={item.title} className="product-thumb" src={`${API_BASE_URL}${item.thumbnail_url}`} />
+                  <button className="image-open-button" type="button" onClick={() => setLightboxImage({ src: item.thumbnail_url!, alt: item.title })}>
+                    <img alt={item.title} className="product-thumb" src={`${API_BASE_URL}${item.thumbnail_url}`} />
+                  </button>
                 ) : (
                   <div className="product-thumb" />
                 )}
-                <div className="product-body">
-                  <div className={getItemStatusClassName(item.status)}>{formatItemStatus(item.status)}</div>
-                  <div className="product-title">{item.title}</div>
-                  <div className="price">{item.price.toLocaleString()}원</div>
-                  <div className="meta-line">
-                    <span>{item.location}</span>
-                    <span>{item.seller.nickname}</span>
+                <Link className="product-card-link" href={`/items/${item.id}`}>
+                  <div className="product-body">
+                    <div className={getItemStatusClassName(item.status)}>{formatItemStatus(item.status)}</div>
+                    <div className="product-title">{item.title}</div>
+                    <div className="price">{item.price.toLocaleString()}원</div>
+                    <div className="meta-line">
+                      <span>{item.location}</span>
+                      <span>{item.seller.nickname}</span>
+                    </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         )}
       </section>
+      {lightboxImage ? (
+        <ImageLightbox images={[lightboxImage]} currentIndex={0} onClose={() => setLightboxImage(null)} />
+      ) : null}
     </div>
   );
 }

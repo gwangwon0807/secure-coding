@@ -1,178 +1,102 @@
-# 중고마켓 웹서비스 시스템 아키텍처 요약
+# 중고거래 플랫폼 시스템 아키텍처 요약
 
-# 1. 전체 구성
+## 1. 전체 구성
 
-| 영역       | 선택 기술                 | 역할                    |
-| -------- | --------------------- | --------------------- |
-| Frontend | Next.js + TypeScript  | 사용자 화면 구성             |
-| Backend  | FastAPI + Python      | API 서버 및 비즈니스 로직 처리   |
-| Database | PostgreSQL            | 서비스 데이터 저장            |
-| 실행 방식    | Docker Compose        | 프론트, 백엔드, DB를 한 번에 실행 |
-| API 방식   | REST API              | 프론트와 백엔드 통신           |
-| 인증 방식    | JWT + HttpOnly Cookie | 로그인 및 권한 처리           |
+| 영역 | 선택 기술 | 역할 |
+| --- | --- | --- |
+| Frontend | Next.js + TypeScript | 사용자 웹 UI |
+| Backend | FastAPI + Python | REST API, 비즈니스 로직 |
+| Database | PostgreSQL | 서비스 데이터 저장 |
+| 실행 방식 | Docker Compose | 프론트/백엔드/DB 통합 실행 |
+| 인증 방식 | JWT + HttpOnly Cookie |
+| 프론트 인증 동기화 | 로그인 응답 `access_token` + localStorage |
 
----
+## 2. 아키텍처 흐름
 
-# 2. 전체 아키텍처 흐름
+1. 사용자가 Next.js 프론트엔드에 접속한다.
+2. 프론트엔드는 FastAPI 백엔드로 REST API 요청을 보낸다.
+3. 백엔드는 인증, 상품, 커뮤니티, 채팅, 거래, 신고, 송금, 관리자 로직을 처리한다.
+4. PostgreSQL에 저장된 데이터를 읽고 쓴다.
+5. 업로드 이미지는 백엔드 정적 파일 경로(`/uploads`)로 제공된다.
 
-| 단계 | 흐름                              |
-| -- | ------------------------------- |
-| 1  | 사용자가 Next.js 프론트엔드에 접속          |
-| 2  | 프론트엔드는 FastAPI 백엔드로 API 요청      |
-| 3  | 백엔드는 인증, 상품, 채팅, 거래, 신고 로직 처리   |
-| 4  | 백엔드는 PostgreSQL에서 데이터를 조회하거나 저장 |
-| 5  | 처리 결과를 JSON 형태로 프론트엔드에 반환       |
-| 6  | 프론트엔드는 받은 데이터를 화면에 표시           |
+## 3. Docker 실행 구조
 
----
+| 컨테이너 | 역할 |
+| --- | --- |
+| `frontend` | Next.js 서버 |
+| `backend` | FastAPI 서버 |
+| `db` | PostgreSQL |
 
-# 3. Docker 실행 구조
+## 4. 현재 프로젝트 구성
 
-| 컨테이너     | 역할            | 설명       |
-| -------- | ------------- | -------- |
-| frontend | Next.js 실행    | 사용자 웹 화면 |
-| backend  | FastAPI 실행    | API 서버   |
-| db       | PostgreSQL 실행 | 데이터베이스   |
+| 경로 | 역할 |
+| --- | --- |
+| `frontend/app` | 페이지 라우팅 |
+| `frontend/components` | 공통 UI 컴포넌트 |
+| `frontend/lib` | API 호출, 인증 유틸 |
+| `backend/app/api/v1/endpoints` | 라우터 |
+| `backend/app/models` | ORM 모델 |
+| `backend/app/schemas` | 요청/응답 스키마 |
+| `api_docs` | 라우터별 API 문서 |
+| `codex` | 요구사항, API 요약, 시스템 설계 문서 |
 
-| 실행 방식             | 설명                                    |
-| ----------------- | ------------------------------------- |
-| Docker Compose 사용 | 하나의 명령으로 frontend, backend, db를 함께 실행 |
-| 컨테이너 분리           | 각 역할을 독립적으로 관리 가능                     |
-| 개발 편의성            | 로컬 환경 차이를 줄이고 초기 세팅을 단순화              |
+## 5. Backend Router 구성
 
----
+| Router | Prefix | 역할 |
+| --- | --- | --- |
+| Auth | `/api/v1/auth` | 회원가입, 로그인, 토큰 재발급, 인증 사용자 조회 |
+| Users | `/api/v1/users` | 프로필, 비밀번호, 내 상품, 회원 탈퇴 |
+| Items | `/api/v1/items` | 상품 CRUD, 검색, 상태 변경 |
+| Images | `/api/v1/images` | 상품/커뮤니티 이미지 업로드 및 삭제 |
+| Categories | `/api/v1/categories` | 카테고리 조회 |
+| Community | `/api/v1/community` | 커뮤니티 글/댓글 관리 |
+| Chat Rooms | `/api/v1/chat-rooms` | 채팅방, 메시지, 읽음 처리 |
+| Transactions | `/api/v1/transactions` | 거래 요청, 취소, 완료 |
+| Transfers | `/api/v1/transfers` | 지갑, 송금, 원장 조회 |
+| Reports | `/api/v1/reports` | 신고 등록, 내 신고 조회 |
+| Blocks | `/api/v1/blocks` | 사용자 차단 |
+| Admin | `/api/v1/admin` | 운영 관리 |
 
-# 4. 프로젝트 전체 트리 구성
+## 6. Database 구성
 
-| 최상위 폴더             | 역할                 |
-| ------------------ | ------------------ |
-| frontend           | Next.js 프론트엔드 프로젝트 |
-| backend            | FastAPI 백엔드 프로젝트   |
-| docker-compose.yml | 전체 컨테이너 실행 설정      |
-| .env               | 환경변수 관리            |
-| README.md          | 프로젝트 설명 문서         |
+| 테이블 | 역할 |
+| --- | --- |
+| `users` | 회원 정보 |
+| `categories` | 상품 카테고리 |
+| `items` | 상품 정보 |
+| `item_images` | 상품 이미지 |
+| `community_posts` | 커뮤니티 글 |
+| `community_comments` | 커뮤니티 댓글 |
+| `community_post_images` | 커뮤니티 이미지 |
+| `chat_rooms` | 채팅방 |
+| `messages` | 채팅 메시지 |
+| `transactions` | 거래 정보 |
+| `wallets` | 사용자 지갑 |
+| `wallet_ledgers` | 지갑 원장 |
+| `transfers` | 사용자 간 송금 |
+| `reports` | 신고 정보 |
+| `blocks` | 사용자 차단 |
+| `audit_logs` | 관리자 조치 로그 |
 
----
+## 7. 핵심 도메인 흐름
 
-# 5. Frontend 폴더 구성
+| 기능 | 현재 흐름 |
+| --- | --- |
+| 회원 | 가입 → 로그인 → 내 정보/비밀번호 관리 |
+| 상품 | 등록 → 목록/검색 → 상세 → 수정/삭제/상태 변경 |
+| 커뮤니티 | 글 작성 → 댓글 작성 → 신고 처리 |
+| 채팅 | 상품 기반 채팅방 생성 → 메시지 송수신 → 송금 진입 |
+| 거래 | 구매 의사 → 예약중 전환 → 양측 완료 확인 → 거래완료 |
+| 송금 | 지갑 생성 → 사용자 송금 → 원장 기록 |
+| 신고 | 신고 접수 → 관리자 검토 → 상품 숨김 또는 사용자 제재 |
+| 관리자 | 회원/상품/신고/거래/커뮤니티/채팅/지갑/송금/감사로그 관리 |
 
-| 폴더         | 역할               |
-| ---------- | ---------------- |
-| app        | 페이지 라우팅          |
-| components | 공통 UI 컴포넌트       |
-| features   | 기능별 프론트 로직       |
-| lib        | API 통신, 공통 유틸    |
-| hooks      | 커스텀 훅            |
-| types      | TypeScript 타입 정의 |
-| styles     | 전역 스타일           |
+## 8. 설계 기준
 
----
-
-# 6. Frontend 주요 페이지
-
-| 페이지       | 역할            |
-| --------- | ------------- |
-| 메인 페이지    | 상품 목록 조회      |
-| 로그인 페이지   | 사용자 로그인       |
-| 회원가입 페이지  | 사용자 가입        |
-| 상품 목록 페이지 | 검색, 필터, 정렬    |
-| 상품 상세 페이지 | 상품 상세 정보 확인   |
-| 상품 등록 페이지 | 판매 상품 등록      |
-| 채팅 페이지    | 구매자와 판매자 대화   |
-| 거래 페이지    | 거래 요청 및 상태 확인 |
-| 신고 페이지    | 상품/사용자 신고     |
-| 관리자 페이지   | 회원, 상품, 신고 관리 |
-
----
-
-# 7. Backend 폴더 구성
-
-| 폴더           | 역할               |
-| ------------ | ---------------- |
-| main         | FastAPI 앱 시작점    |
-| core         | 환경설정, 보안, 공통 설정  |
-| db           | PostgreSQL 연결 관리 |
-| models       | DB 테이블 모델        |
-| schemas      | 요청/응답 데이터 구조     |
-| api          | API 라우터          |
-| services     | 비즈니스 로직          |
-| repositories | DB 접근 로직         |
-| utils        | 공통 유틸 기능         |
-
----
-
-# 8. Backend Router 구성
-
-| Router       | Prefix               | 역할                |
-| ------------ | -------------------- | ----------------- |
-| Auth         | /api/v1/auth         | 회원가입, 로그인, 로그아웃   |
-| Users        | /api/v1/users        | 내 정보, 공개 프로필      |
-| Items        | /api/v1/items        | 상품 등록, 조회, 수정, 삭제 |
-| Images       | /api/v1/images       | 상품 이미지 업로드, 삭제    |
-| Categories   | /api/v1/categories   | 카테고리 조회           |
-| Chat Rooms   | /api/v1/chat-rooms   | 채팅방, 메시지          |
-| Transactions | /api/v1/transactions | 거래 요청, 수락, 완료     |
-| Reports      | /api/v1/reports      | 신고 등록, 내 신고 조회    |
-| Blocks       | /api/v1/blocks       | 사용자 차단, 차단 해제     |
-| Admin        | /api/v1/admin        | 관리자 기능            |
-
----
-
-# 9. Database 구성
-
-| 테이블          | 역할        |
-| ------------ | --------- |
-| users        | 회원 정보     |
-| items        | 상품 정보     |
-| item_images  | 상품 이미지    |
-| categories   | 카테고리      |
-| chat_rooms   | 채팅방       |
-| messages     | 채팅 메시지    |
-| transactions | 거래 정보     |
-| reports      | 신고 정보     |
-| blocks       | 사용자 차단 정보 |
-| audit_logs   | 관리자 조치 로그 |
-
----
-
-# 10. 핵심 기능 흐름
-
-| 기능  | 흐름                            |
-| --- | ----------------------------- |
-| 회원  | 가입 → 로그인 → 내 정보 조회/수정         |
-| 상품  | 상품 등록 → 목록 조회 → 상세 조회 → 수정/삭제 |
-| 이미지 | 이미지 업로드 → 상품 등록 시 이미지 연결      |
-| 채팅  | 상품 상세에서 채팅 시작 → 메시지 전송/조회     |
-| 거래  | 구매자 거래 요청 → 판매자 수락 → 거래 완료    |
-| 신고  | 사용자 신고 접수 → 관리자 검토 → 조치       |
-| 차단  | 사용자 차단 → 채팅 제한                |
-| 관리자 | 회원 관리, 상품 관리, 신고 처리, 로그 확인    |
-
----
-
-# 11. 설계 기준
-
-| 기준    | 설명                                |
-| ----- | --------------------------------- |
-| 빠른 개발 | 프론트, 백엔드, DB를 명확히 분리              |
-| 유지보수  | 기능별 Router, Service, Model 구조 사용  |
-| 확장성   | MVP 이후 결제, 실시간 채팅, 알림 추가 가능       |
-| 안정성   | PostgreSQL로 거래, 신고, 채팅 데이터 정합성 확보 |
-| 운영성   | 관리자 기능과 Audit Log로 운영 이력 관리       |
-| 보안    | JWT, HttpOnly Cookie, 권한 검증 사용    |
-
----
-
-# 12. 최종 정리
-
-| 항목     | 최종 방향                            |
-| ------ | -------------------------------- |
-| 개발 구조  | Frontend / Backend / Database 분리 |
-| 실행 구조  | Docker Compose 하나로 전체 실행         |
-| 프론트엔드  | Next.js 기반 화면 개발                 |
-| 백엔드    | FastAPI 기반 REST API 서버           |
-| 데이터베이스 | PostgreSQL                       |
-| MVP 핵심 | 상품, 채팅, 거래 상태, 신고, 관리자 기능        |
-| 제외 기능  | 실제 결제, 에스크로, 추천 알고리즘, 실시간 채팅     |
-
-> 최종 구조는 **Next.js 프론트엔드 + FastAPI 백엔드 + PostgreSQL 데이터베이스**를 Docker Compose로 함께 실행하는 MVP 아키텍처다.
+| 기준 | 설명 |
+| --- | --- |
+| MVP 우선 | 핵심 거래 흐름을 먼저 안정화 |
+| 명확한 분리 | Frontend / Backend / DB / Docs 분리 |
+| 확장성 | 커뮤니티, 신고, 송금 등 기능 추가 가능 구조 |
+| 운영성 | 관리자 기능과 감사로그 유지 |
+| 보안 | JWT, Cookie, 권한 검증, 신고/차단/송금 제한 반영 |

@@ -3,7 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.v1.api import api_router
 from app.core.config import get_settings
@@ -57,7 +58,55 @@ def seed_data() -> None:
         db.close()
 
 
+def ensure_postgres_enums() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_type
+                            WHERE typname = 'reporttargettype'
+                        ) THEN
+                            ALTER TYPE reporttargettype ADD VALUE IF NOT EXISTS 'COMMUNITY_POST';
+                            ALTER TYPE reporttargettype ADD VALUE IF NOT EXISTS 'COMMUNITY_COMMENT';
+                        END IF;
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_type
+                            WHERE typname = 'wallettransactiontype'
+                        ) THEN
+                            ALTER TYPE wallettransactiontype ADD VALUE IF NOT EXISTS 'USER_DEPOSIT';
+                            ALTER TYPE wallettransactiontype ADD VALUE IF NOT EXISTS 'USER_WITHDRAWAL';
+                        END IF;
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_type
+                            WHERE typname = 'adminactiontype'
+                        ) THEN
+                            ALTER TYPE adminactiontype ADD VALUE IF NOT EXISTS 'USER_DELETED';
+                            ALTER TYPE adminactiontype ADD VALUE IF NOT EXISTS 'COMMUNITY_POST_HIDDEN';
+                            ALTER TYPE adminactiontype ADD VALUE IF NOT EXISTS 'COMMUNITY_COMMENT_HIDDEN';
+                            ALTER TYPE adminactiontype ADD VALUE IF NOT EXISTS 'CHAT_ROOM_DELETED';
+                            ALTER TYPE adminactiontype ADD VALUE IF NOT EXISTS 'MESSAGE_DELETED';
+                        END IF;
+                    END
+                    $$;
+                    """
+                )
+            )
+    except SQLAlchemyError:
+        # Fresh databases or partially initialized schemas should not fail startup here.
+        return
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    ensure_postgres_enums()
     seed_data()
