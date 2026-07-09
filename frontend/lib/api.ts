@@ -3,6 +3,13 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   "http://localhost:8000";
 
+function getStoredAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem("secure-coding-access-token");
+}
+
 type ApiErrorDetail = {
   loc?: Array<string | number>;
   msg?: string;
@@ -26,7 +33,7 @@ function formatApiError(data: unknown, fallback: string): string {
           return "카테고리를 선택해 주세요.";
         }
         if (field === "title") {
-          return "상품명은 2자 이상 100자 이하로 입력해 주세요.";
+          return "제목을 입력해 주세요.";
         }
         if (field === "description") {
           return "상품 설명을 입력해 주세요.";
@@ -66,11 +73,13 @@ function formatApiError(data: unknown, fallback: string): string {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = getStoredAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers || {}),
     },
     cache: "no-store",
@@ -95,11 +104,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export async function apiFormFetch<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
+  const accessToken = getStoredAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     method: init?.method || "POST",
     body: formData,
     credentials: "include",
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(init?.headers || {}),
+    },
   });
 
   if (!response.ok) {

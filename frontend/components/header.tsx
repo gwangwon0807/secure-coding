@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
+import { AUTH_CHANGED_EVENT, clearAccessToken, hasAccessToken, notifyAuthChanged } from "@/lib/auth";
 
 type Me = {
   id: number;
@@ -17,15 +18,29 @@ export function Header() {
   const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
-    apiFetch<Me>("/api/v1/auth/me")
-      .then(setMe)
-      .catch(() => setMe(null));
+    const syncAuth = () => {
+      if (!hasAccessToken()) {
+        setMe(null);
+        return;
+      }
+      apiFetch<Me>("/api/v1/auth/me")
+        .then(setMe)
+        .catch(() => setMe(null));
+    };
+
+    syncAuth();
+    window.addEventListener(AUTH_CHANGED_EVENT, syncAuth);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, syncAuth);
+    };
   }, [pathname]);
 
   async function handleLogout() {
     try {
-      await apiFetch("/api/v1/auth/logout", { method: "POST" });
+      clearAccessToken();
       setMe(null);
+      notifyAuthChanged();
       router.push("/");
       router.refresh();
     } catch (error) {
@@ -41,6 +56,9 @@ export function Header() {
           번개중고
         </Link>
         <div className="topbar-actions">
+          <Link className="nav-link" href="/community">
+            커뮤니티
+          </Link>
           {me ? (
             <>
               <Link className="nav-link" href="/items/new">

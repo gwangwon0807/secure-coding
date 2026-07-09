@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { apiFetch } from "@/lib/api";
+import { clearAccessToken, notifyAuthChanged } from "@/lib/auth";
 
 type Me = {
   id: number;
@@ -29,7 +30,8 @@ function MyPageContent() {
   }, []);
 
   async function handleLogout() {
-    await apiFetch("/api/v1/auth/logout", { method: "POST" });
+    clearAccessToken();
+    notifyAuthChanged();
     router.push("/");
     router.refresh();
   }
@@ -65,6 +67,10 @@ function MyPageContent() {
             <Link className="mypage-action-card" href="/mypage/items">
               <strong>내가 올린 상품</strong>
               <span>등록 상품 확인, 수정, 삭제</span>
+            </Link>
+            <Link className="mypage-action-card" href="/wallet">
+              <strong>지갑</strong>
+              <span>잔액 확인, 입금, 출금</span>
             </Link>
             <button className="mypage-action-card danger-card" type="button" onClick={handleLogout}>
               <strong>로그아웃</strong>

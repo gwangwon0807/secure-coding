@@ -8,7 +8,8 @@ from app.api.v1.endpoints.helpers import build_report_target_summary, ensure_pag
 from app.core.deps import require_active_user
 from app.db.session import get_db
 from app.models.chat import Message
-from app.models.enums import ReportStatus, ReportTargetType
+from app.models.community import CommunityComment, CommunityPost
+from app.models.enums import ItemStatus, ReportStatus, ReportTargetType
 from app.models.item import Item
 from app.models.report import Report
 from app.models.user import User
@@ -17,6 +18,18 @@ from app.utils.pagination import build_pagination
 
 
 router = APIRouter()
+ITEM_REPORT_THRESHOLD = 3
+USER_REPORT_REVIEW_THRESHOLD = 5
+
+
+def _active_report_count(db: Session, target_type: ReportTargetType, target_id: int) -> int:
+    return db.scalar(
+        select(func.count(Report.id)).where(
+            Report.target_type == target_type,
+            Report.target_id == target_id,
+            Report.status != ReportStatus.REJECTED,
+        )
+    ) or 0
 
 
 def _ensure_report_target(db: Session, payload: ReportCreateRequest, reporter_id: int) -> None:
@@ -32,6 +45,18 @@ def _ensure_report_target(db: Session, payload: ReportCreateRequest, reporter_id
             raise HTTPException(status_code=404, detail="TARGET_NOT_FOUND")
         if user.id == reporter_id:
             raise HTTPException(status_code=400, detail="CANNOT_REPORT_SELF")
+    elif payload.target_type == ReportTargetType.COMMUNITY_POST:
+        post = db.get(CommunityPost, payload.target_id)
+        if not post or post.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="TARGET_NOT_FOUND")
+        if post.author_id == reporter_id:
+            raise HTTPException(status_code=400, detail="CANNOT_REPORT_OWN_POST")
+    elif payload.target_type == ReportTargetType.COMMUNITY_COMMENT:
+        comment = db.get(CommunityComment, payload.target_id)
+        if not comment or comment.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="TARGET_NOT_FOUND")
+        if comment.author_id == reporter_id:
+            raise HTTPException(status_code=400, detail="CANNOT_REPORT_OWN_COMMENT")
     elif payload.target_type == ReportTargetType.CHAT_ROOM:
         room = require_chat_room(db, payload.target_id)
         if reporter_id not in {room.buyer_id, room.seller_id}:
@@ -71,6 +96,14 @@ def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
+    if report.target_type == ReportTargetType.ITEM:
+        item = db.get(Item, report.target_id)
+        if item and item.deleted_at is None:
+            active_count = _active_report_count(db, ReportTargetType.ITEM, report.target_id)
+            if active_count >= ITEM_REPORT_THRESHOLD and item.status != ItemStatus.HIDDEN:
+                item.status = ItemStatus.HIDDEN
+                db.add(item)
+                db.commit()
     return report
 
 

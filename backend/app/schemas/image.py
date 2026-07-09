@@ -2,14 +2,10 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import ImageStatus
-
-
 class ImageResponse(BaseModel):
     id: int
     image_url: str
     sort_order: int
-    status: ImageStatus
     created_at: datetime
 
 

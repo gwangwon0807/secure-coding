@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
+import { clearAccessToken, notifyAuthChanged } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -24,7 +25,8 @@ export default function SignupPage() {
           password: form.get("password"),
         }),
       });
-      await apiFetch("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
+      clearAccessToken();
+      notifyAuthChanged();
       router.replace("/login");
       router.refresh();
     } catch (err) {
