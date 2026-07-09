@@ -217,6 +217,14 @@ img {
   gap: 10px;
 }
 
+.search-row + .search-row {
+  margin-top: 10px;
+}
+
+.search-row-extended {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .search-input,
 .search-select,
 .form input,
@@ -243,6 +251,31 @@ img {
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
+}
+
+.active-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #ffd2ae;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  cursor: pointer;
+}
+
+.active-filter-chip strong {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .chip-row {

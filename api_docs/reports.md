@@ -1,48 +1,49 @@
-# Report Router
+# Reports Router
 
 | 항목 | 내용 |
 | --- | --- |
 | Prefix | `/api/v1/reports` |
-| Method 수 | 3 |
-| 담당 기능 | 신고 등록, 내 신고 목록/상세 조회 |
+| 인증 | User |
+| 설명 | 신고 등록, 내 신고 목록/상세 조회 |
 
-## Endpoint 목록
+## Endpoint
 
-| Method | Endpoint | 설명 |
-| --- | --- | --- |
-| POST | `` | 신고 등록 |
-| GET | `/me` | 내 신고 목록 조회 |
-| GET | `/{report_id}` | 내 신고 상세 조회 |
+| Method | Endpoint | Auth | 설명 | 핵심 필드 |
+| --- | --- | --- | --- | --- |
+| POST | `/` | User | 신고 등록 | `target_type`, `target_id`, `reason`, `detail` |
+| GET | `/me` | User | 내 신고 목록 조회 | `status_filter`, `target_type`, `page`, `size` |
+| GET | `/{report_id}` | User | 내 신고 상세 조회 | - |
 
-## 지원 신고 대상
+## 신고 대상 타입
 
-| 대상 타입 | 설명 |
+| 값 | 설명 |
 | --- | --- |
-| `ITEM` | 상품 신고 |
-| `USER` | 사용자 신고 |
-| `COMMUNITY_POST` | 커뮤니티 글 신고 |
-| `COMMUNITY_COMMENT` | 커뮤니티 댓글 신고 |
-| `CHAT_ROOM` | 채팅방 신고 |
-| `MESSAGE` | 메시지 신고 |
+| `ITEM` | 상품 |
+| `USER` | 사용자 |
+| `COMMUNITY_POST` | 커뮤니티 글 |
+| `COMMUNITY_COMMENT` | 커뮤니티 댓글 |
+| `CHAT_ROOM` | 채팅방 |
+| `MESSAGE` | 메시지 |
 
-## 신고 생성 예시
+## 신고 상태값
 
-```json
-{
-  "target_type": "COMMUNITY_COMMENT",
-  "target_id": 15,
-  "reason": "ABUSIVE_LANGUAGE",
-  "detail": "욕설이 포함되어 있습니다."
-}
-```
+| 값 | 설명 |
+| --- | --- |
+| `RECEIVED` | 접수 |
+| `REVIEWING` | 검토중 |
+| `RESOLVED` | 처리됨 |
+| `REJECTED` | 반려 |
 
-## 자동 처리 규칙
+## 주요 규칙
 
-- 같은 사용자는 같은 대상에 중복 신고할 수 없다.
-- 상품 신고가 누적되면 일정 횟수 이상에서 자동 숨김 처리될 수 있다.
-- 사용자 신고 누적은 관리자 검토 대상 표시 기준으로 활용된다.
+| 항목 | 내용 |
+| --- | --- |
+| 중복 제한 | 같은 사용자가 같은 대상에 중복 신고 불가 |
+| 자기 신고 | 자기 자신 / 자기 글 / 자기 댓글 / 자기 상품 신고 불가 |
+| 상품 자동 처리 | 상품 신고 누적 시 자동 숨김 가능 |
+| 사용자 누적 | 관리자 검토 대상 기준으로 활용 |
 
-## 주요 에러 코드
+## 주요 에러
 
 | 코드 | 설명 |
 | --- | --- |
@@ -52,4 +53,4 @@
 | `CANNOT_REPORT_OWN_ITEM` | 자기 상품 신고 불가 |
 | `CANNOT_REPORT_OWN_POST` | 자기 글 신고 불가 |
 | `CANNOT_REPORT_OWN_COMMENT` | 자기 댓글 신고 불가 |
-| `FORBIDDEN_CHAT_REPORT` | 채팅 참여자가 아님 |
+| `FORBIDDEN_CHAT_REPORT` | 채팅 참여자 아님 |

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
@@ -29,17 +30,46 @@ const SORT_OPTIONS = [
   { value: "price_desc", label: "높은 가격순" },
 ];
 
-export default function HomePage() {
+const STATUS_OPTIONS = [
+  { value: "", label: "전체 상태" },
+  { value: "ON_SALE", label: "판매중" },
+  { value: "RESERVED", label: "예약중" },
+  { value: "SOLD", label: "거래완료" },
+];
+
+function formatPriceFilterLabel(minPrice: string, maxPrice: string) {
+  if (minPrice && maxPrice) return `${Number(minPrice).toLocaleString()}원 ~ ${Number(maxPrice).toLocaleString()}원`;
+  if (minPrice) return `${Number(minPrice).toLocaleString()}원 이상`;
+  if (maxPrice) return `${Number(maxPrice).toLocaleString()}원 이하`;
+  return "";
+}
+
+function HomePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialKeyword = searchParams.get("keyword") || "";
+  const initialCategoryId = searchParams.get("category_id") || "";
+  const initialMinPrice = searchParams.get("min_price") || "";
+  const initialMaxPrice = searchParams.get("max_price") || "";
+  const initialLocation = searchParams.get("location") || "";
+  const initialStatus = searchParams.get("status") || "";
+  const initialSort = searchParams.get("sort") || "latest";
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [keyword, setKeyword] = useState("");
-  const [submittedKeyword, setSubmittedKeyword] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [sort, setSort] = useState("latest");
+  const [keyword, setKeyword] = useState(initialKeyword);
+  const [submittedKeyword, setSubmittedKeyword] = useState(initialKeyword);
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
+  const [minPrice, setMinPrice] = useState(initialMinPrice);
+  const [maxPrice, setMaxPrice] = useState(initialMaxPrice);
+  const [location, setLocation] = useState(initialLocation);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [sort, setSort] = useState(initialSort);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+  const hasInvalidPriceRange = Boolean(minPrice && maxPrice && Number(minPrice) > Number(maxPrice));
 
   useEffect(() => {
     apiFetch<{ categories: Category[] }>("/api/v1/categories")
@@ -48,10 +78,22 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (hasInvalidPriceRange) {
+      setItems([]);
+      setTotalCount(0);
+      setIsLoading(false);
+      setError("최소 가격은 최대 가격보다 클 수 없습니다.");
+      return;
+    }
     const search = new URLSearchParams();
     if (submittedKeyword.trim()) search.set("keyword", submittedKeyword.trim());
     if (categoryId) search.set("category_id", categoryId);
+    if (minPrice) search.set("min_price", minPrice);
+    if (maxPrice) search.set("max_price", maxPrice);
+    if (location.trim()) search.set("location", location.trim());
+    if (statusFilter) search.set("status", statusFilter);
     if (sort) search.set("sort", sort);
+    router.replace(search.toString() ? `/?${search.toString()}` : "/", { scroll: false });
     setIsLoading(true);
     setError("");
     apiFetch<ItemResponse>(`/api/v1/items?${search.toString()}`)
@@ -61,12 +103,48 @@ export default function HomePage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "상품 목록을 불러오지 못했습니다."))
       .finally(() => setIsLoading(false));
-  }, [submittedKeyword, categoryId, sort]);
+  }, [submittedKeyword, categoryId, minPrice, maxPrice, location, statusFilter, sort, router, hasInvalidPriceRange]);
 
   const activeCategoryName = useMemo(
     () => categories.find((category) => String(category.id) === categoryId)?.name,
     [categories, categoryId],
   );
+
+  const activeFilters = useMemo(
+    () => [
+      submittedKeyword.trim() ? { key: "keyword", label: `검색어 ${submittedKeyword.trim()}` } : null,
+      activeCategoryName ? { key: "category", label: activeCategoryName } : null,
+      minPrice || maxPrice ? { key: "price", label: formatPriceFilterLabel(minPrice, maxPrice) } : null,
+      location.trim() ? { key: "location", label: `지역 ${location.trim()}` } : null,
+      statusFilter ? { key: "status", label: formatItemStatus(statusFilter) } : null,
+    ].filter(Boolean) as Array<{ key: string; label: string }>,
+    [submittedKeyword, activeCategoryName, minPrice, maxPrice, location, statusFilter],
+  );
+
+  function resetFilters() {
+    setKeyword("");
+    setSubmittedKeyword("");
+    setCategoryId("");
+    setMinPrice("");
+    setMaxPrice("");
+    setLocation("");
+    setStatusFilter("");
+    setSort("latest");
+  }
+
+  function clearFilter(key: string) {
+    if (key === "keyword") {
+      setKeyword("");
+      setSubmittedKeyword("");
+    }
+    if (key === "category") setCategoryId("");
+    if (key === "price") {
+      setMinPrice("");
+      setMaxPrice("");
+    }
+    if (key === "location") setLocation("");
+    if (key === "status") setStatusFilter("");
+  }
 
   return (
     <div className="home-layout">
@@ -113,6 +191,53 @@ export default function HomePage() {
               검색
             </button>
           </div>
+          <div className="search-row search-row-extended">
+            <label className="sr-only" htmlFor="min-price">
+              최소 가격
+            </label>
+            <input
+              id="min-price"
+              className="search-input"
+              inputMode="numeric"
+              value={minPrice}
+              onChange={(event) => setMinPrice(event.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="최소 가격"
+            />
+            <label className="sr-only" htmlFor="max-price">
+              최대 가격
+            </label>
+            <input
+              id="max-price"
+              className="search-input"
+              inputMode="numeric"
+              value={maxPrice}
+              onChange={(event) => setMaxPrice(event.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="최대 가격"
+            />
+            <label className="sr-only" htmlFor="location">
+              지역
+            </label>
+            <input
+              id="location"
+              className="search-input"
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              placeholder="지역으로 검색"
+            />
+            <label className="sr-only" htmlFor="status">
+              판매 상태
+            </label>
+            <select id="status" className="search-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button className="button subtle" type="button" onClick={resetFilters}>
+              초기화
+            </button>
+          </div>
         </form>
         <div className="search-meta">
           <div className="chip-row">
@@ -135,6 +260,16 @@ export default function HomePage() {
             상품 {totalCount}개
           </div>
         </div>
+        {activeFilters.length > 0 ? (
+          <div className="active-filter-row">
+            {activeFilters.map((filter) => (
+              <button key={filter.key} className="active-filter-chip" type="button" onClick={() => clearFilter(filter.key)}>
+                <span>{filter.label}</span>
+                <strong>×</strong>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {error ? <div className="error-box">{error}</div> : null}
@@ -149,6 +284,10 @@ export default function HomePage() {
 
         {isLoading ? (
           <div className="panel empty-state muted">상품을 불러오는 중입니다.</div>
+        ) : hasInvalidPriceRange ? (
+          <div className="panel empty-state">
+            <strong>가격 범위를 다시 확인해 주세요.</strong>
+          </div>
         ) : items.length === 0 ? (
           <div className="panel empty-state">
             <strong>조건에 맞는 상품이 없습니다.</strong>
@@ -184,5 +323,13 @@ export default function HomePage() {
         <ImageLightbox images={[lightboxImage]} currentIndex={0} onClose={() => setLightboxImage(null)} />
       ) : null}
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="panel empty-state muted">상품을 불러오는 중입니다.</div>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

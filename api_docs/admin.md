@@ -3,65 +3,87 @@
 | 항목 | 내용 |
 | --- | --- |
 | Prefix | `/api/v1/admin` |
-| Method 수 | 17 |
-| 담당 기능 | 회원, 상품, 신고, 거래, 커뮤니티, 채팅, 지갑, 송금, 감사로그 관리 |
-| 권한 | `ADMIN` |
+| 인증 | Admin |
+| 설명 | 회원, 상품, 신고, 거래, 커뮤니티, 채팅, 지갑, 송금, 감사로그 관리 |
 
-## Endpoint 목록
+## Endpoint
 
-| Method | Endpoint | 설명 |
-| --- | --- | --- |
-| GET | `/users` | 회원 목록 조회 |
-| PATCH | `/users/{user_id}/status` | 회원 상태 변경 |
-| GET | `/items` | 상품 목록 조회 |
-| PATCH | `/items/{item_id}/status` | 상품 상태 변경 |
-| GET | `/reports` | 신고 목록 조회 |
-| GET | `/reports/{report_id}` | 신고 상세 조회 |
-| PATCH | `/reports/{report_id}` | 신고 처리 |
-| GET | `/transactions` | 전체 거래 조회 |
-| GET | `/community/posts` | 커뮤니티 글 목록 조회 |
-| PATCH | `/community/posts/{post_id}/hide` | 커뮤니티 글 숨김/복구 |
-| GET | `/community/comments` | 커뮤니티 댓글 목록 조회 |
-| PATCH | `/community/comments/{comment_id}/hide` | 커뮤니티 댓글 숨김/복구 |
-| GET | `/chat-rooms` | 채팅방 목록 조회 |
-| GET | `/chat-rooms/{room_id}/messages` | 채팅 메시지 조회 |
-| DELETE | `/chat-rooms/{room_id}` | 채팅방 삭제 |
-| GET | `/wallets` | 사용자 지갑 목록 조회 |
-| PATCH | `/wallets/{user_id}/adjust` | 사용자 지갑 잔액 조정 |
-| GET | `/transfers` | 전체 송금 내역 조회 |
-| GET | `/audit-logs` | 관리자 조치 로그 조회 |
+### 회원 / 상품 / 신고 / 거래
 
-## 관리 범위
+| Method | Endpoint | 설명 | 핵심 필드 |
+| --- | --- | --- | --- |
+| GET | `/users` | 회원 목록 조회 | `keyword`, `status`, `role`, `page`, `size` |
+| PATCH | `/users/{user_id}/status` | 회원 상태 변경 | `status`, `reason` |
+| GET | `/users/{user_id}` | 회원 상세 조회 | 활동 내역, 신고, 지갑, 채팅, 거래, 송금 |
+| GET | `/items` | 상품 목록 조회 | `keyword`, `seller_id`, `category_id`, `status`, `reported_only`, `page`, `size` |
+| PATCH | `/items/{item_id}/status` | 상품 상태 변경 | `status`, `reason` |
+| GET | `/items/{item_id}` | 상품 상세 조회 | 이미지, 신고, 거래, 채팅 |
+| GET | `/reports` | 신고 목록 조회 | `status`, `target_type`, `reason`, `include_resolved`, `page`, `size` |
+| GET | `/reports/{report_id}` | 신고 상세 조회 | 신고자, 대상 상세, 처리 정보 |
+| PATCH | `/reports/{report_id}` | 신고 처리 | `status`, `action_type`, `admin_memo`, `result_message` |
+| GET | `/transactions` | 전체 거래 조회 | `page`, `size` |
 
-- 사용자 조회 및 제재
-- 상품 조회 및 상태 변경
-- 신고 조회 및 처리
-- 전체 거래 조회
-- 커뮤니티 글/댓글 숨김 및 복구
-- 채팅방 조회 및 삭제
-- 사용자 지갑 잔액 조정
-- 전체 송금 내역 조회
-- 감사 로그 조회
+### 커뮤니티 / 채팅
+
+| Method | Endpoint | 설명 | 핵심 필드 |
+| --- | --- | --- | --- |
+| GET | `/community/posts` | 커뮤니티 글 목록 조회 | `keyword`, `reported_only`, `page`, `size` |
+| PATCH | `/community/posts/{post_id}/hide` | 글 숨김 / 복구 | `reason` |
+| GET | `/community/posts/{post_id}` | 글 상세 조회 | 작성자, 이미지, 댓글, 신고 |
+| GET | `/community/comments` | 댓글 목록 조회 | `keyword`, `reported_only`, `page`, `size` |
+| PATCH | `/community/comments/{comment_id}/hide` | 댓글 숨김 / 복구 | `reason` |
+| GET | `/community/comments/{comment_id}` | 댓글 상세 조회 | 작성자, 원글, 신고 |
+| GET | `/chat-rooms` | 채팅방 목록 조회 | `keyword`, `page`, `size` |
+| GET | `/chat-rooms/{room_id}/messages` | 채팅 메시지 조회 | `page`, `size` |
+| GET | `/chat-rooms/{room_id}` | 채팅방 상세 조회 | 상품, 구매자, 판매자, 메시지, 신고 |
+| DELETE | `/chat-rooms/{room_id}` | 채팅방 삭제 | - |
+
+### 지갑 / 송금 / 로그
+
+| Method | Endpoint | 설명 | 핵심 필드 |
+| --- | --- | --- | --- |
+| GET | `/wallets` | 사용자 지갑 목록 조회 | `keyword`, `page`, `size` |
+| PATCH | `/wallets/{user_id}/adjust` | 사용자 잔액 조정 | `amount`, `reason` |
+| GET | `/transfers` | 전체 송금 조회 | `page`, `size` |
+| GET | `/transfers/{transfer_id}` | 송금 상세 조회 | 송신자, 수신자, 금액, 메모, 상태 |
+| GET | `/audit-logs` | 감사 로그 조회 | `page`, `size` |
+
+## 관리자 조치 타입
+
+| 값 | 설명 |
+| --- | --- |
+| `NONE` | 조치 없음 |
+| `ITEM_HIDDEN` | 상품 숨김 |
+| `ITEM_DELETED` | 상품 삭제 |
+| `USER_SUSPENDED` | 사용자 정지 |
+| `USER_DELETED` | 사용자 삭제 |
+| `COMMUNITY_POST_HIDDEN` | 게시글 숨김 |
+| `COMMUNITY_COMMENT_HIDDEN` | 댓글 숨김 |
+| `CHAT_ROOM_DELETED` | 채팅방 삭제 |
+| `MESSAGE_DELETED` | 메시지 삭제 |
+| `REPORT_REJECTED` | 신고 반려 |
 
 ## 주요 규칙
 
-- 모든 상태 변경/관리 작업은 관리자 권한이 필요하다.
-- 주요 변경 작업은 `audit_logs`에 기록된다.
-- 진행 중 거래가 있는 사용자/상품은 일부 변경이 제한된다.
-- 커뮤니티 글/댓글 숨김 API는 동일 엔드포인트를 다시 호출하면 복구된다.
-- 지갑 조정은 양수/음수 모두 가능하지만 잔액이 음수가 되면 실패한다.
+| 항목 | 내용 |
+| --- | --- |
+| 권한 | 모든 API는 `ADMIN` 전용 |
+| 감사 로그 | 주요 변경 작업은 `audit_logs` 기록 |
+| 신고 처리 | 대상별 실제 숨김 / 삭제 / 정지 반영 |
+| 잔액 조정 | 결과 잔액이 음수가 되면 실패 |
 
-## 주요 에러 코드
+## 주요 에러
 
 | 코드 | 설명 |
 | --- | --- |
 | `ADMIN_REQUIRED` | 관리자 권한 필요 |
-| `USER_NOT_FOUND` | 대상 사용자 없음 |
-| `ITEM_NOT_FOUND` | 대상 상품 없음 |
+| `USER_NOT_FOUND` | 사용자 없음 |
+| `ITEM_NOT_FOUND` | 상품 없음 |
 | `REPORT_NOT_FOUND` | 신고 없음 |
 | `CHAT_ROOM_NOT_FOUND` | 채팅방 없음 |
 | `COMMUNITY_POST_NOT_FOUND` | 게시글 없음 |
 | `COMMUNITY_COMMENT_NOT_FOUND` | 댓글 없음 |
 | `ACTIVE_TRANSACTION_EXISTS` | 진행 중 거래 존재 |
-| `CANNOT_UPDATE_SELF_STATUS` | 자기 계정 상태 변경 불가 |
-| `INSUFFICIENT_BALANCE` | 잔액 조정 결과가 음수 |
+| `CANNOT_UPDATE_SELF_STATUS` | 자기 자신 상태 변경 불가 |
+| `INSUFFICIENT_BALANCE` | 잔액 부족 |
+| `INVALID_REPORT_ACTION_FOR_TARGET` | 신고 대상과 조치 불일치 |
