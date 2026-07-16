@@ -9,8 +9,9 @@ import { apiFetch } from "@/lib/api";
 type Wallet = { user: { id: number; nickname: string }; balance: number };
 type LedgerEntry = { id: number; transaction_type: string; amount: number; balance_after: number; description: string; created_at: string };
 type Transfer = { id: number; sender: { id: number; nickname: string }; recipient: { id: number; nickname: string }; amount: number; note: string | null; created_at: string };
+type DepositRequest = { id: number; user: { id: number; nickname: string }; amount: number; status: string; created_at: string; reviewed_at: string | null; reviewed_by_admin: { id: number; nickname: string } | null };
 type UserSummary = { id: number; nickname: string };
-type WalletMode = "deposit" | "withdraw" | "transfer";
+type WalletMode = "depositRequest" | "withdraw" | "transfer";
 
 function WalletContent() {
   const searchParams = useSearchParams();
@@ -18,23 +19,26 @@ function WalletContent() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [recipientId] = useState(initialRecipientId);
   const [recipient, setRecipient] = useState<UserSummary | null>(null);
-  const [mode, setMode] = useState<WalletMode>(initialRecipientId ? "transfer" : "deposit");
+  const [mode, setMode] = useState<WalletMode>(initialRecipientId ? "transfer" : "depositRequest");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   async function loadWallet() {
-    const [walletData, ledgerData, transferData] = await Promise.all([
+    const [walletData, ledgerData, transferData, depositRequestData] = await Promise.all([
       apiFetch<Wallet>("/api/v1/transfers/wallet/me"),
       apiFetch<{ ledger: LedgerEntry[] }>("/api/v1/transfers/wallet/me/ledger"),
       apiFetch<{ transfers: Transfer[] }>("/api/v1/transfers"),
+      apiFetch<{ requests: DepositRequest[] }>("/api/v1/transfers/wallet/me/deposit-requests"),
     ]);
     setWallet(walletData);
     setLedger(ledgerData.ledger);
     setTransfers(transferData.transfers);
+    setDepositRequests(depositRequestData.requests);
   }
 
   useEffect(() => {
@@ -57,12 +61,12 @@ function WalletContent() {
     setSuccess("");
     const numericAmount = Number(amount);
     try {
-      if (mode === "deposit") {
-        await apiFetch("/api/v1/transfers/wallet/me/deposit", {
+      if (mode === "depositRequest") {
+        await apiFetch("/api/v1/transfers/wallet/me/deposit-requests", {
           method: "POST",
           body: JSON.stringify({ amount: numericAmount }),
         });
-        setSuccess("입금이 완료되었습니다.");
+        setSuccess("충전 요청이 접수되었습니다.");
       }
       if (mode === "withdraw") {
         await apiFetch("/api/v1/transfers/wallet/me/withdraw", {
@@ -96,7 +100,7 @@ function WalletContent() {
     }
   }
 
-  const actionLabel = mode === "deposit" ? "입금하기" : mode === "withdraw" ? "출금하기" : "송금하기";
+  const actionLabel = mode === "depositRequest" ? "충전 요청하기" : mode === "withdraw" ? "출금하기" : "송금하기";
 
   return (
     <div className="section">
@@ -104,8 +108,8 @@ function WalletContent() {
         <div className="section-title">
           <h1 className="page-title">지갑</h1>
           <div className="tabs wallet-tabs">
-            <button className={`tab ${mode === "deposit" ? "active" : ""}`} type="button" onClick={() => setMode("deposit")}>
-              입금
+            <button className={`tab ${mode === "depositRequest" ? "active" : ""}`} type="button" onClick={() => setMode("depositRequest")}>
+              충전 요청
             </button>
             <button className={`tab ${mode === "withdraw" ? "active" : ""}`} type="button" onClick={() => setMode("withdraw")}>
               출금
@@ -122,6 +126,12 @@ function WalletContent() {
           <strong>{(wallet?.balance || 0).toLocaleString()}원</strong>
         </div>
         <form className="form two-column-form" onSubmit={handleSubmit}>
+          {mode === "depositRequest" ? (
+            <div className="field-group field-span-2">
+              <label className="field-label">안내</label>
+              <div className="recipient-display">입금 요청 후 관리자가 확인하면 잔액에 반영됩니다.</div>
+            </div>
+          ) : null}
           {mode === "transfer" ? (
             <div className="field-group field-span-2">
               <label className="field-label">받는 사람</label>
@@ -148,6 +158,28 @@ function WalletContent() {
             {actionLabel}
           </button>
         </form>
+      </section>
+
+      <section className="panel wide-panel">
+        <div className="section-title compact">
+          <h2>충전 요청 내역</h2>
+        </div>
+        <div className="stack-list">
+          {depositRequests.map((request) => (
+            <div className="list-card" key={request.id}>
+              <div className="list-card-head">
+                <strong>{request.amount.toLocaleString()}원</strong>
+                <div className={request.status === "APPROVED" ? "status status-sold" : request.status === "REJECTED" ? "status status-hidden" : "status status-reserved"}>
+                  {request.status === "APPROVED" ? "승인됨" : request.status === "REJECTED" ? "거절됨" : "대기중"}
+                </div>
+              </div>
+              <div className="card-sub">
+                {request.reviewed_by_admin ? `${request.reviewed_by_admin.nickname} 확인` : "관리자 확인 대기"}
+              </div>
+            </div>
+          ))}
+          {depositRequests.length === 0 ? <div className="muted">충전 요청 내역이 없습니다.</div> : null}
+        </div>
       </section>
 
       <section className="panel wide-panel">

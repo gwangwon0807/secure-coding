@@ -15,9 +15,10 @@ type AdminPost = { id: number; title: string; author: { nickname: string }; comm
 type AdminComment = { id: number; post_id: number; post_title: string | null; author: { nickname: string }; content: string; report_count: number; deleted_at: string | null };
 type AdminChatRoom = { id: number; item: { title: string }; buyer: { nickname: string }; seller: { nickname: string }; message_count: number };
 type Wallet = { user: { id: number; nickname: string }; balance: number };
+type DepositRequest = { id: number; user: { id: number; nickname: string }; amount: number; status: string; created_at: string; reviewed_at: string | null; reviewed_by_admin: { id: number; nickname: string } | null };
 type Transfer = { id: number; sender: { nickname: string }; recipient: { nickname: string }; amount: number; note: string | null; created_at: string };
-type Tab = "users" | "items" | "community" | "chat" | "reports" | "wallets" | "transfers";
-type DetailKind = "user" | "item" | "post" | "comment" | "chat" | "report" | "transfer";
+type Tab = "users" | "items" | "community" | "chat" | "reports" | "wallets" | "depositRequests" | "transfers";
+type DetailKind = "user" | "item" | "post" | "comment" | "chat" | "report" | "transfer" | "depositRequest";
 type SelectedDetail = { kind: DetailKind; id: number; title: string } | null;
 
 const DETAIL_ENDPOINTS: Record<DetailKind, (id: number) => string> = {
@@ -28,6 +29,7 @@ const DETAIL_ENDPOINTS: Record<DetailKind, (id: number) => string> = {
   chat: (id) => `/api/v1/admin/chat-rooms/${id}`,
   report: (id) => `/api/v1/admin/reports/${id}`,
   transfer: (id) => `/api/v1/admin/transfers/${id}`,
+  depositRequest: (id) => `/api/v1/admin/deposit-requests/${id}`,
 };
 
 function statusText(status: string) {
@@ -39,6 +41,8 @@ function statusText(status: string) {
     REVIEWING: "검토중",
     RESOLVED: "처리됨",
     REJECTED: "반려",
+    PENDING: "대기중",
+    APPROVED: "승인됨",
     NONE: "조치 없음",
     ITEM_HIDDEN: "상품 숨김",
     ITEM_DELETED: "상품 삭제",
@@ -61,6 +65,7 @@ function AdminContent() {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [chatRooms, setChatRooms] = useState<AdminChatRoom[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [tab, setTab] = useState<Tab>("users");
@@ -73,28 +78,34 @@ function AdminContent() {
   const [itemStatus, setItemStatus] = useState("ON_SALE");
   const [walletAmount, setWalletAmount] = useState("");
   const [walletReason, setWalletReason] = useState("");
+  const [depositDecisionReason, setDepositDecisionReason] = useState("");
   const [reportStatus, setReportStatus] = useState("REVIEWING");
   const [reportAction, setReportAction] = useState("NONE");
 
   async function loadAdminData() {
-    const [userData, itemData, reportData, postData, commentData, chatData, walletData, transferData] = await Promise.all([
-      apiFetch<{ users: AdminUser[] }>("/api/v1/admin/users"),
-      apiFetch<{ items: AdminItem[] }>("/api/v1/admin/items"),
-      apiFetch<{ reports: AdminReport[] }>("/api/v1/admin/reports"),
-      apiFetch<{ posts: AdminPost[] }>("/api/v1/admin/community/posts"),
-      apiFetch<{ comments: AdminComment[] }>("/api/v1/admin/community/comments"),
-      apiFetch<{ chat_rooms: AdminChatRoom[] }>("/api/v1/admin/chat-rooms"),
-      apiFetch<{ wallets: Wallet[] }>("/api/v1/admin/wallets"),
-      apiFetch<{ transfers: Transfer[] }>("/api/v1/admin/transfers"),
+    const failures: string[] = [];
+    async function load<T>(label: string, path: string, apply: (data: T) => void) {
+      try {
+        apply(await apiFetch<T>(path));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "데이터를 불러오지 못했습니다.";
+        failures.push(`${label}: ${message}`);
+      }
+    }
+
+    await Promise.all([
+      load<{ users: AdminUser[] }>("회원", "/api/v1/admin/users", (data) => setUsers(data.users)),
+      load<{ items: AdminItem[] }>("상품", "/api/v1/admin/items", (data) => setItems(data.items)),
+      load<{ reports: AdminReport[] }>("신고", "/api/v1/admin/reports", (data) => setReports(data.reports.filter((report) => !["RESOLVED", "REJECTED"].includes(report.status)))),
+      load<{ posts: AdminPost[] }>("커뮤니티 글", "/api/v1/admin/community/posts", (data) => setPosts(data.posts)),
+      load<{ comments: AdminComment[] }>("커뮤니티 댓글", "/api/v1/admin/community/comments", (data) => setComments(data.comments)),
+      load<{ chat_rooms: AdminChatRoom[] }>("채팅", "/api/v1/admin/chat-rooms", (data) => setChatRooms(data.chat_rooms)),
+      load<{ wallets: Wallet[] }>("지갑", "/api/v1/admin/wallets", (data) => setWallets(data.wallets)),
+      load<{ requests: DepositRequest[] }>("충전 요청", "/api/v1/admin/deposit-requests", (data) => setDepositRequests(data.requests)),
+      load<{ transfers: Transfer[] }>("송금", "/api/v1/admin/transfers", (data) => setTransfers(data.transfers)),
     ]);
-    setUsers(userData.users);
-    setItems(itemData.items);
-    setReports(reportData.reports.filter((report) => !["RESOLVED", "REJECTED"].includes(report.status)));
-    setPosts(postData.posts);
-    setComments(commentData.comments);
-    setChatRooms(chatData.chat_rooms);
-    setWallets(walletData.wallets);
-    setTransfers(transferData.transfers);
+
+    setError(failures.join("\n"));
   }
 
   async function openDetail(next: NonNullable<SelectedDetail>) {
@@ -111,6 +122,7 @@ function AdminContent() {
     setReason("");
     setWalletAmount("");
     setWalletReason("");
+    setDepositDecisionReason("");
   }
 
   function handleTabChange(nextTab: Tab) {
@@ -122,6 +134,7 @@ function AdminContent() {
     setReason("");
     setWalletAmount("");
     setWalletReason("");
+    setDepositDecisionReason("");
   }
 
   async function refreshSelected() {
@@ -207,6 +220,17 @@ function AdminContent() {
     await refreshSelected();
   }
 
+  async function handleDepositDecision(action: "approve" | "reject") {
+    if (!selected || selected.kind !== "depositRequest") return;
+    await apiFetch(`/api/v1/admin/deposit-requests/${selected.id}/${action}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason: depositDecisionReason || null }),
+    });
+    setNotice(action === "approve" ? "충전 요청을 승인했습니다." : "충전 요청을 거절했습니다.");
+    setDepositDecisionReason("");
+    await refreshSelected();
+  }
+
   const reviewUsers = users.filter((user) => user.needs_review).slice(0, 8);
 
   return (
@@ -221,6 +245,7 @@ function AdminContent() {
             ["chat", "채팅"],
             ["reports", "신고"],
             ["wallets", "지갑"],
+            ["depositRequests", "충전요청"],
             ["transfers", "송금"],
           ].map(([value, label]) => (
             <button key={value} className={`tab ${tab === value ? "active" : ""}`} type="button" onClick={() => handleTabChange(value as Tab)}>
@@ -250,6 +275,7 @@ function AdminContent() {
           {tab === "chat" ? renderChatRooms(chatRooms, openDetail) : null}
           {tab === "reports" ? renderReports(reports, openDetail) : null}
           {tab === "wallets" ? renderWallets(wallets, openDetail) : null}
+          {tab === "depositRequests" ? renderDepositRequests(depositRequests, openDetail) : null}
           {tab === "transfers" ? renderTransfers(transfers, openDetail) : null}
         </section>
 
@@ -278,6 +304,8 @@ function AdminContent() {
                 setWalletAmount,
                 walletReason,
                 setWalletReason,
+                depositDecisionReason,
+                setDepositDecisionReason,
                 reportStatus,
                 setReportStatus,
                 reportAction,
@@ -286,6 +314,7 @@ function AdminContent() {
                 handleItemStatus,
                 handleWalletAdjust,
                 handleReportUpdate,
+                handleDepositDecision,
                 handleModeration,
                 handleDeleteChatRoom,
               })}
@@ -388,6 +417,20 @@ function renderWallets(wallets: Wallet[], openDetail: (target: NonNullable<Selec
   );
 }
 
+function renderDepositRequests(depositRequests: DepositRequest[], openDetail: (target: NonNullable<SelectedDetail>) => Promise<void>) {
+  return (
+    <div className="table-like">
+      {depositRequests.map((request) => (
+        <button className="admin-row-button" key={request.id} type="button" onClick={() => void openDetail({ kind: "depositRequest", id: request.id, title: `${request.user.nickname} 충전 요청` })}>
+          <strong>{request.user.nickname}</strong>
+          <span>{request.amount.toLocaleString()}원</span>
+          <span>{request.status === "PENDING" ? "대기중" : request.status === "APPROVED" ? "승인됨" : "거절됨"}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function renderTransfers(transfers: Transfer[], openDetail: (target: NonNullable<SelectedDetail>) => Promise<void>) {
   return (
     <div className="table-like">
@@ -411,6 +454,7 @@ function detailLabel(kind: DetailKind) {
     chat: "채팅방 상세",
     report: "신고 상세",
     transfer: "송금 상세",
+    depositRequest: "충전 요청 상세",
   }[kind];
 }
 
@@ -422,6 +466,7 @@ function renderDetailBody(selected: NonNullable<SelectedDetail>, detail: any, op
   if (selected.kind === "chat") return <ChatDetail detail={detail} openDetail={openDetail} />;
   if (selected.kind === "report") return <ReportDetail detail={detail} openDetail={openDetail} />;
   if (selected.kind === "transfer") return <TransferDetail detail={detail} openDetail={openDetail} />;
+  if (selected.kind === "depositRequest") return <DepositRequestDetail detail={detail} openDetail={openDetail} />;
   return null;
 }
 
@@ -434,6 +479,7 @@ function UserDetail({ detail, openDetail }: { detail: any; openDetail: (target: 
     { key: "chat_rooms", label: "채팅", count: detail.chat_rooms?.length || 0 },
     { key: "transactions", label: "거래", count: detail.transactions?.length || 0 },
     { key: "transfers", label: "송금", count: detail.transfers?.length || 0 },
+    { key: "deposit_requests", label: "충전요청", count: detail.deposit_requests?.length || 0 },
     { key: "reports", label: "신고", count: detail.reports?.length || 0 },
   ];
 
@@ -480,6 +526,11 @@ function UserDetail({ detail, openDetail }: { detail: any; openDetail: (target: 
         {activity === "transfers" ? (
           <MiniList title="송금 내역" items={detail.transfers} render={(transfer: any) => (
             <button type="button" onClick={() => void openDetail({ kind: "transfer", id: transfer.id, title: `${transfer.sender.nickname} → ${transfer.recipient.nickname}` })}>{transfer.sender.nickname} → {transfer.recipient.nickname} · {transfer.amount.toLocaleString()}원</button>
+          )} />
+        ) : null}
+        {activity === "deposit_requests" ? (
+          <MiniList title="충전 요청" items={detail.deposit_requests} render={(request: any) => (
+            <button type="button" onClick={() => void openDetail({ kind: "depositRequest", id: request.id, title: `${request.user.nickname} 충전 요청` })}>{request.amount.toLocaleString()}원 · {request.status === "PENDING" ? "대기중" : request.status === "APPROVED" ? "승인됨" : "거절됨"}</button>
           )} />
         ) : null}
         {activity === "reports" ? <ReportList reports={detail.reports} openDetail={openDetail} /> : null}
@@ -580,6 +631,17 @@ function TransferDetail({ detail, openDetail }: { detail: any; openDetail: (targ
   );
 }
 
+function DepositRequestDetail({ detail, openDetail }: { detail: any; openDetail: (target: NonNullable<SelectedDetail>) => Promise<void> }) {
+  return (
+    <div className="admin-detail-stack">
+      <div className="admin-kv"><span>신청 금액</span><strong>{detail.amount.toLocaleString()}원</strong></div>
+      <div className="admin-kv"><span>상태</span><strong>{detail.status === "PENDING" ? "대기중" : detail.status === "APPROVED" ? "승인됨" : "거절됨"}</strong></div>
+      <button className="admin-link-button" type="button" onClick={() => void openDetail({ kind: "user", id: detail.user.id, title: detail.user.nickname })}>요청 사용자 {detail.user.nickname}</button>
+      {detail.reviewed_by_admin ? <div className="admin-kv"><span>처리 관리자</span><strong>{detail.reviewed_by_admin.nickname}</strong></div> : null}
+    </div>
+  );
+}
+
 function TargetPreview({ targetType, targetId, detail, openDetail }: { targetType: string; targetId: number; detail: any; openDetail: (target: NonNullable<SelectedDetail>) => Promise<void> }) {
   const target = targetType === "USER" ? { kind: "user" as DetailKind, id: targetId, title: detail.user?.nickname || "회원" } :
     targetType === "ITEM" ? { kind: "item" as DetailKind, id: targetId, title: detail.title || "상품" } :
@@ -625,6 +687,8 @@ function renderControls(props: {
   setWalletAmount: (value: string) => void;
   walletReason: string;
   setWalletReason: (value: string) => void;
+  depositDecisionReason: string;
+  setDepositDecisionReason: (value: string) => void;
   reportStatus: string;
   setReportStatus: (value: string) => void;
   reportAction: string;
@@ -633,6 +697,7 @@ function renderControls(props: {
   handleItemStatus: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleWalletAdjust: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleReportUpdate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  handleDepositDecision: (action: "approve" | "reject") => Promise<void>;
   handleModeration: (path: string, message: string) => Promise<void>;
   handleDeleteChatRoom: () => Promise<void>;
 }) {
@@ -707,6 +772,21 @@ function renderControls(props: {
         {reasonInput}
         <button className="button primary" type="submit">신고 처리</button>
       </form>
+    );
+  }
+  if (props.selected.kind === "depositRequest") {
+    return (
+      <div className="admin-control-box">
+        <input value={props.depositDecisionReason} onChange={(event) => props.setDepositDecisionReason(event.target.value)} placeholder="처리 메모" />
+        {props.detail.status === "PENDING" ? (
+          <>
+            <button className="button primary" type="button" onClick={() => void props.handleDepositDecision("approve")}>충전 승인</button>
+            <button className="button subtle" type="button" onClick={() => void props.handleDepositDecision("reject")}>충전 거절</button>
+          </>
+        ) : (
+          <div className="muted">이미 처리된 요청입니다.</div>
+        )}
+      </div>
     );
   }
   return null;

@@ -6,39 +6,46 @@ from app.api.v1.endpoints.helpers import check_block_relation, ensure_page_size
 from app.core.deps import require_active_user
 from app.db.session import get_db
 from app.models.chat import ChatRoom
-from app.models.enums import UserStatus, WalletTransactionType
+from app.models.enums import DepositRequestStatus, UserStatus, WalletTransactionType
 from app.models.transaction import Transaction
-from app.models.transfer import Transfer, Wallet, WalletLedger
+from app.models.transfer import DepositRequest, Transfer, WalletLedger
 from app.models.user import User
-from app.schemas.transfer import TransferCreateRequest, TransferDetailResponse, TransferHistoryEntry, TransferListResponse, WalletBalanceChangeRequest, WalletBalanceChangeResponse, WalletLedgerEntry, WalletLedgerResponse, WalletSummaryResponse
+from app.schemas.transfer import (
+    DepositRequestCreateRequest,
+    DepositRequestEntry,
+    DepositRequestListResponse,
+    TransferCreateRequest,
+    TransferDetailResponse,
+    TransferHistoryEntry,
+    TransferListResponse,
+    WalletBalanceChangeRequest,
+    WalletBalanceChangeResponse,
+    WalletLedgerEntry,
+    WalletLedgerResponse,
+    WalletSummaryResponse,
+)
+from app.services.wallets import get_or_create_wallet, lock_wallets
 from app.utils.pagination import build_pagination
 
-
 router = APIRouter()
-INITIAL_WALLET_BALANCE = 100000
-
-
-def get_or_create_wallet(db: Session, user_id: int) -> Wallet:
-    wallet = db.scalar(select(Wallet).where(Wallet.user_id == user_id))
-    if wallet:
-        return wallet
-    wallet = Wallet(user_id=user_id, balance=INITIAL_WALLET_BALANCE)
-    db.add(wallet)
-    db.flush()
-    db.add(
-        WalletLedger(
-            wallet_id=wallet.id,
-            transaction_type=WalletTransactionType.INITIAL_CREDIT,
-            amount=INITIAL_WALLET_BALANCE,
-            balance_after=wallet.balance,
-            description="초기 테스트 잔액 지급",
-        )
-    )
-    return wallet
 
 
 def build_party_summary(user: User) -> dict:
     return {"id": user.id, "nickname": user.nickname}
+
+
+def build_deposit_request_entry(db: Session, deposit_request: DepositRequest) -> DepositRequestEntry:
+    reviewer = db.get(User, deposit_request.reviewed_by_admin_id) if deposit_request.reviewed_by_admin_id else None
+    requester = db.get(User, deposit_request.user_id)
+    return DepositRequestEntry(
+        id=deposit_request.id,
+        user=build_party_summary(requester),
+        amount=deposit_request.amount,
+        status=deposit_request.status,
+        created_at=deposit_request.created_at,
+        reviewed_at=deposit_request.reviewed_at,
+        reviewed_by_admin=build_party_summary(reviewer) if reviewer else None,
+    )
 
 
 @router.get("/wallet/me", response_model=WalletSummaryResponse)
@@ -80,32 +87,54 @@ def get_my_wallet_ledger(
     }
 
 
-@router.post("/wallet/me/deposit", response_model=WalletBalanceChangeResponse)
+@router.get("/wallet/me/deposit-requests", response_model=DepositRequestListResponse)
+def list_my_deposit_requests(
+    page: int = 1,
+    size: int = 20,
+    current_user: User = Depends(require_active_user),
+    db: Session = Depends(get_db),
+):
+    ensure_page_size(page, size)
+    stmt = select(DepositRequest).where(DepositRequest.user_id == current_user.id)
+    total_count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    requests = db.scalars(stmt.order_by(DepositRequest.created_at.desc()).offset((page - 1) * size).limit(size)).all()
+    return {
+        "requests": [build_deposit_request_entry(db, entry) for entry in requests],
+        "pagination": build_pagination(page, size, total_count),
+    }
+
+
+@router.post("/wallet/me/deposit-requests", response_model=DepositRequestEntry, status_code=status.HTTP_201_CREATED)
 def deposit_my_wallet(
+    payload: DepositRequestCreateRequest,
+    current_user: User = Depends(require_active_user),
+    db: Session = Depends(get_db),
+):
+    db.scalar(select(User).where(User.id == current_user.id).with_for_update())
+    pending_request = db.scalar(
+        select(DepositRequest).where(
+            DepositRequest.user_id == current_user.id,
+            DepositRequest.status == DepositRequestStatus.PENDING,
+        )
+    )
+    if pending_request:
+        raise HTTPException(status_code=409, detail="DEPOSIT_REQUEST_ALREADY_PENDING")
+    deposit_request = DepositRequest(user_id=current_user.id, amount=payload.amount)
+    db.add(deposit_request)
+    db.commit()
+    db.refresh(deposit_request)
+    return build_deposit_request_entry(db, deposit_request)
+
+
+@router.post("/wallet/me/deposit", response_model=WalletBalanceChangeResponse)
+def deposit_my_wallet_legacy(
     payload: WalletBalanceChangeRequest,
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ):
-    wallet = get_or_create_wallet(db, current_user.id)
-    wallet.balance += payload.amount
-    db.add(wallet)
-    db.flush()
-    db.add(
-        WalletLedger(
-            wallet_id=wallet.id,
-            transaction_type=WalletTransactionType.USER_DEPOSIT,
-            amount=payload.amount,
-            balance_after=wallet.balance,
-            description="내 지갑 입금",
-        )
-    )
-    db.commit()
-    db.refresh(wallet)
-    return WalletBalanceChangeResponse(
-        balance=wallet.balance,
-        amount=payload.amount,
-        transaction_type=WalletTransactionType.USER_DEPOSIT,
-        updated_at=wallet.updated_at,
+    raise HTTPException(
+        status_code=403,
+        detail="DIRECT_DEPOSIT_DISABLED_USE_REQUEST",
     )
 
 
@@ -115,7 +144,7 @@ def withdraw_my_wallet(
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ):
-    wallet = get_or_create_wallet(db, current_user.id)
+    wallet = lock_wallets(db, [current_user.id])[current_user.id]
     if wallet.balance < payload.amount:
         raise HTTPException(status_code=409, detail="INSUFFICIENT_BALANCE")
     wallet.balance -= payload.amount
@@ -164,8 +193,9 @@ def create_transfer(
         if not chat_room or current_user.id not in {chat_room.buyer_id, chat_room.seller_id} or payload.recipient_id not in {chat_room.buyer_id, chat_room.seller_id}:
             raise HTTPException(status_code=403, detail="INVALID_CHAT_ROOM_CONTEXT")
 
-    sender_wallet = get_or_create_wallet(db, current_user.id)
-    recipient_wallet = get_or_create_wallet(db, recipient.id)
+    locked_wallets = lock_wallets(db, [current_user.id, recipient.id])
+    sender_wallet = locked_wallets[current_user.id]
+    recipient_wallet = locked_wallets[recipient.id]
     if sender_wallet.balance < payload.amount:
         raise HTTPException(status_code=409, detail="INSUFFICIENT_BALANCE")
 

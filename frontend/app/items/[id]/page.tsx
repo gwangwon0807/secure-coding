@@ -7,7 +7,6 @@ import { useParams, useRouter } from "next/navigation";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ReportForm } from "@/components/report-form";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
-import { hasAccessToken } from "@/lib/auth";
 import { formatItemStatus, getItemStatusClassName } from "@/lib/labels";
 
 type ItemDetail = {
@@ -36,13 +35,9 @@ export default function ItemDetailPage() {
     apiFetch<ItemDetail>(`/api/v1/items/${params.id}`)
       .then(setItem)
       .catch((err) => setError(err instanceof Error ? err.message : "상품을 불러오지 못했습니다."));
-    if (hasAccessToken()) {
-      apiFetch<Me>("/api/v1/auth/me")
-        .then(setMe)
-        .catch(() => setMe(null));
-    } else {
-      setMe(null);
-    }
+    apiFetch<Me>("/api/v1/auth/me")
+      .then(setMe)
+      .catch(() => setMe(null));
   }, [params.id]);
 
   async function handleCreateChat() {

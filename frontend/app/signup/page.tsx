@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
-import { clearAccessToken, notifyAuthChanged } from "@/lib/auth";
+import { notifyAuthChanged } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -25,7 +25,6 @@ export default function SignupPage() {
           password: form.get("password"),
         }),
       });
-      clearAccessToken();
       notifyAuthChanged();
       router.replace("/login");
       router.refresh();

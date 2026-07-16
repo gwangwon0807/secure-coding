@@ -39,4 +39,3 @@ class SignupResponse(UserSummary):
 
 class LoginResponse(BaseModel):
     user: UserSummary
-    access_token: str

@@ -46,9 +46,16 @@ class WalletTransactionType(str, enum.Enum):
     INITIAL_CREDIT = "INITIAL_CREDIT"
     ADMIN_ADJUSTMENT = "ADMIN_ADJUSTMENT"
     USER_DEPOSIT = "USER_DEPOSIT"
+    DEPOSIT_APPROVED = "DEPOSIT_APPROVED"
     USER_WITHDRAWAL = "USER_WITHDRAWAL"
     TRANSFER_OUT = "TRANSFER_OUT"
     TRANSFER_IN = "TRANSFER_IN"
+
+
+class DepositRequestStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 class ReportStatus(str, enum.Enum):

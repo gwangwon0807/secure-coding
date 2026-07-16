@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import { ReportForm } from "@/components/report-form";
 import { apiFetch } from "@/lib/api";
-import { hasAccessToken } from "@/lib/auth";
 import { formatItemStatus, getItemStatusClassName } from "@/lib/labels";
 
 type ChatRoom = {
@@ -57,13 +56,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     const preferredRoomId = typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("room")) || null : null;
-    if (hasAccessToken()) {
-      apiFetch<Me>("/api/v1/auth/me")
-        .then(setMe)
-        .catch(() => setMe(null));
-    } else {
-      setMe(null);
-    }
+    apiFetch<Me>("/api/v1/auth/me")
+      .then(setMe)
+      .catch(() => setMe(null));
     loadRooms(preferredRoomId)
       .catch((err) => setError(err instanceof Error ? err.message : "채팅 목록을 불러오지 못했습니다."));
   }, []);

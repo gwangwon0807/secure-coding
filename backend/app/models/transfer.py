@@ -1,14 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.models.enums import TransferStatus, WalletTransactionType
+from app.models.enums import DepositRequestStatus, TransferStatus, WalletTransactionType
 
 
 class Wallet(Base):
     __tablename__ = "wallets"
+    __table_args__ = (CheckConstraint("balance >= 0", name="ck_wallets_balance_nonnegative"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
@@ -19,6 +20,7 @@ class Wallet(Base):
 
 class Transfer(Base):
     __tablename__ = "transfers"
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_transfers_amount_positive"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -44,3 +46,16 @@ class WalletLedger(Base):
     description: Mapped[str] = mapped_column(Text)
     counterparty_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DepositRequest(Base):
+    __tablename__ = "deposit_requests"
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_deposit_requests_amount_positive"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    status: Mapped[DepositRequestStatus] = mapped_column(Enum(DepositRequestStatus), default=DepositRequestStatus.PENDING, index=True)
+    reviewed_by_admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

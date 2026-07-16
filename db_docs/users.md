@@ -27,5 +27,4 @@
 
 | 컬럼 | 연결 |
 | --- | --- |
-| `id` | `items.seller_id`, `community_posts.author_id`, `community_comments.author_id`, `chat_rooms.buyer_id`, `chat_rooms.seller_id`, `messages.sender_id`, `transactions.buyer_id`, `transactions.seller_id`, `wallets.user_id`, `transfers.sender_id`, `transfers.recipient_id`, `reports.reporter_id`, `reports.admin_id`, `blocks.blocker_id`, `blocks.blocked_user_id`, `audit_logs.admin_id` |
-
+| `id` | `auth_sessions.user_id`, `items.seller_id`, `community_posts.author_id`, `community_comments.author_id`, `chat_rooms.buyer_id`, `chat_rooms.seller_id`, `messages.sender_id`, `transactions.buyer_id`, `transactions.seller_id`, `wallets.user_id`, `deposit_requests.user_id`, `deposit_requests.reviewed_by_admin_id`, `transfers.sender_id`, `transfers.recipient_id`, `reports.reporter_id`, `reports.admin_id`, `blocks.blocker_id`, `blocks.blocked_user_id`, `audit_logs.admin_id` |

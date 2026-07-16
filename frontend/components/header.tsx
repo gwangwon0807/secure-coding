@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
-import { AUTH_CHANGED_EVENT, clearAccessToken, hasAccessToken, notifyAuthChanged } from "@/lib/auth";
+import { AUTH_CHANGED_EVENT, notifyAuthChanged } from "@/lib/auth";
 
 type Me = {
   id: number;
@@ -19,10 +19,6 @@ export function Header() {
 
   useEffect(() => {
     const syncAuth = () => {
-      if (!hasAccessToken()) {
-        setMe(null);
-        return;
-      }
       apiFetch<Me>("/api/v1/auth/me")
         .then(setMe)
         .catch(() => setMe(null));
@@ -38,7 +34,7 @@ export function Header() {
 
   async function handleLogout() {
     try {
-      clearAccessToken();
+      await apiFetch("/api/v1/auth/logout", { method: "POST" });
       setMe(null);
       notifyAuthChanged();
       router.push("/");
