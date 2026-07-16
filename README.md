@@ -1,4 +1,4 @@
-# 번개중고
+# Tiny Second-hand Shopping Platform
 
 ## 주요 기능
 
