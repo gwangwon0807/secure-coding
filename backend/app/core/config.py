@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="postgresql+psycopg://postgres:postgres@db:5432/secure_coding")
     secret_key: str = "change-me"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 15
     refresh_token_expire_minutes: int = 60 * 24 * 7
     algorithm: str = "HS256"
 
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     access_cookie_name: str = "access_token"
     refresh_cookie_name: str = "refresh_token"
+    csrf_cookie_name: str = "csrf_token"
 
     admin_email: str = "admin@example.com"
     admin_password: str = "admin1234"

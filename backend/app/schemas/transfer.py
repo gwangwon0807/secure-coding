@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import TransferStatus, WalletTransactionType
+from app.models.enums import DepositRequestStatus, TransferStatus, WalletTransactionType
 from app.schemas.common import PaginationSchema
 
 
@@ -17,6 +17,10 @@ class WalletSummaryResponse(BaseModel):
 
 
 class WalletBalanceChangeRequest(BaseModel):
+    amount: int = Field(ge=1)
+
+
+class DepositRequestCreateRequest(BaseModel):
     amount: int = Field(ge=1)
 
 
@@ -92,6 +96,35 @@ class WalletBalanceChangeResponse(BaseModel):
     amount: int
     transaction_type: WalletTransactionType
     updated_at: datetime
+
+
+class DepositRequestEntry(BaseModel):
+    id: int
+    user: TransferPartySummary
+    amount: int
+    status: DepositRequestStatus
+    created_at: datetime
+    reviewed_at: datetime | None
+    reviewed_by_admin: TransferPartySummary | None = None
+
+
+class DepositRequestListResponse(BaseModel):
+    requests: list[DepositRequestEntry]
+    pagination: PaginationSchema
+
+
+class AdminDepositRequestDecisionRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class AdminDepositRequestDecisionResponse(BaseModel):
+    id: int
+    status: DepositRequestStatus
+    amount: int
+    balance: int
+    reviewed_at: datetime
+    reviewed_by_admin: TransferPartySummary
+    reason: str | None = None
 
 
 class AdminWalletEntry(BaseModel):

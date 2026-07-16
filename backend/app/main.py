@@ -82,7 +82,16 @@ def ensure_postgres_enums() -> None:
                             WHERE typname = 'wallettransactiontype'
                         ) THEN
                             ALTER TYPE wallettransactiontype ADD VALUE IF NOT EXISTS 'USER_DEPOSIT';
+                            ALTER TYPE wallettransactiontype ADD VALUE IF NOT EXISTS 'DEPOSIT_APPROVED';
                             ALTER TYPE wallettransactiontype ADD VALUE IF NOT EXISTS 'USER_WITHDRAWAL';
+                        END IF;
+                        IF EXISTS (
+                            SELECT 1
+                            FROM pg_type
+                            WHERE typname = 'depositrequeststatus'
+                        ) THEN
+                            ALTER TYPE depositrequeststatus ADD VALUE IF NOT EXISTS 'APPROVED';
+                            ALTER TYPE depositrequeststatus ADD VALUE IF NOT EXISTS 'REJECTED';
                         END IF;
                         IF EXISTS (
                             SELECT 1
@@ -105,8 +114,37 @@ def ensure_postgres_enums() -> None:
         return
 
 
+def ensure_postgres_wallet_constraints() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_wallets_balance_nonnegative') THEN
+                        ALTER TABLE wallets
+                        ADD CONSTRAINT ck_wallets_balance_nonnegative CHECK (balance >= 0);
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_transfers_amount_positive') THEN
+                        ALTER TABLE transfers
+                        ADD CONSTRAINT ck_transfers_amount_positive CHECK (amount > 0);
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_deposit_requests_amount_positive') THEN
+                        ALTER TABLE deposit_requests
+                        ADD CONSTRAINT ck_deposit_requests_amount_positive CHECK (amount > 0);
+                    END IF;
+                END
+                $$;
+                """
+            )
+        )
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
     ensure_postgres_enums()
+    ensure_postgres_wallet_constraints()
     seed_data()

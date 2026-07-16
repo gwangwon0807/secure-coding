@@ -1,4 +1,5 @@
 from app.models.audit_log import AuditLog
+from app.models.auth_session import AuthSession
 from app.models.block import Block
 from app.models.category import Category
 from app.models.chat import ChatRoom, Message
@@ -7,11 +8,12 @@ from app.models.item import Item
 from app.models.item_image import ItemImage
 from app.models.report import Report
 from app.models.transaction import Transaction
-from app.models.transfer import Transfer, Wallet, WalletLedger
+from app.models.transfer import DepositRequest, Transfer, Wallet, WalletLedger
 from app.models.user import User
 
 __all__ = [
     "AuditLog",
+    "AuthSession",
     "Block",
     "Category",
     "ChatRoom",
@@ -23,6 +25,7 @@ __all__ = [
     "Message",
     "Report",
     "Transaction",
+    "DepositRequest",
     "Transfer",
     "User",
     "Wallet",

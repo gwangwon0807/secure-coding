@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { apiFetch } from "@/lib/api";
-import { clearAccessToken, notifyAuthChanged } from "@/lib/auth";
+import { notifyAuthChanged } from "@/lib/auth";
 
 type Me = {
   id: number;
@@ -30,10 +30,14 @@ function MyPageContent() {
   }, []);
 
   async function handleLogout() {
-    clearAccessToken();
-    notifyAuthChanged();
-    router.push("/");
-    router.refresh();
+    try {
+      await apiFetch("/api/v1/auth/logout", { method: "POST" });
+      notifyAuthChanged();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "로그아웃에 실패했습니다.");
+    }
   }
 
   return (

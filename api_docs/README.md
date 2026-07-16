@@ -10,7 +10,7 @@
 | `community.md` | 커뮤니티 API |
 | `chat-rooms.md` | 채팅 API |
 | `transactions.md` | 거래 API |
-| `transfers.md` | 지갑 / 송금 API |
+| `transfers.md` | 지갑 / 충전 요청 / 송금 API |
 | `reports.md` | 신고 API |
 | `blocks.md` | 차단 API |
 | `admin.md` | 관리자 API |

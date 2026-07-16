@@ -44,6 +44,10 @@
 | --- | --- | --- | --- |
 | GET | `/wallets` | 사용자 지갑 목록 조회 | `keyword`, `page`, `size` |
 | PATCH | `/wallets/{user_id}/adjust` | 사용자 잔액 조정 | `amount`, `reason` |
+| GET | `/deposit-requests` | 전체 충전 요청 목록 | `status`, `page`, `size` |
+| GET | `/deposit-requests/{request_id}` | 충전 요청 상세 | - |
+| PATCH | `/deposit-requests/{request_id}/approve` | 충전 승인 및 잔액 반영 | `reason` |
+| PATCH | `/deposit-requests/{request_id}/reject` | 충전 거절 | `reason` |
 | GET | `/transfers` | 전체 송금 조회 | `page`, `size` |
 | GET | `/transfers/{transfer_id}` | 송금 상세 조회 | 송신자, 수신자, 금액, 메모, 상태 |
 | GET | `/audit-logs` | 감사 로그 조회 | `page`, `size` |
@@ -71,6 +75,8 @@
 | 감사 로그 | 주요 변경 작업은 `audit_logs` 기록 |
 | 신고 처리 | 대상별 실제 숨김 / 삭제 / 정지 반영 |
 | 잔액 조정 | 결과 잔액이 음수가 되면 실패 |
+| 충전 승인 | `PENDING` 요청만 처리, 요청과 지갑을 DB 행 잠금으로 중복 승인 방지 |
+| 지갑 정합성 | 승인·조정·송금은 잔액 변경과 원장 기록을 한 트랜잭션으로 처리 |
 
 ## 주요 에러
 
@@ -86,4 +92,6 @@
 | `ACTIVE_TRANSACTION_EXISTS` | 진행 중 거래 존재 |
 | `CANNOT_UPDATE_SELF_STATUS` | 자기 자신 상태 변경 불가 |
 | `INSUFFICIENT_BALANCE` | 잔액 부족 |
+| `DEPOSIT_REQUEST_NOT_FOUND` | 충전 요청 없음 |
+| `DEPOSIT_REQUEST_ALREADY_PROCESSED` | 이미 승인되거나 거절된 요청 |
 | `INVALID_REPORT_ACTION_FOR_TARGET` | 신고 대상과 조치 불일치 |

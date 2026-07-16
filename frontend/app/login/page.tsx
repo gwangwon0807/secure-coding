@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
-import { notifyAuthChanged, setAccessToken } from "@/lib/auth";
+import { notifyAuthChanged } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,14 +17,13 @@ export default function LoginPage() {
     setIsSubmitting(true);
     const form = new FormData(event.currentTarget);
     try {
-      const data = await apiFetch<{ access_token: string }>("/api/v1/auth/login", {
+      await apiFetch("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({
           email: form.get("email"),
           password: form.get("password"),
         }),
       });
-      setAccessToken(data.access_token);
       notifyAuthChanged();
       const next = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") || "/" : "/";
       router.replace(next);

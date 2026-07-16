@@ -11,40 +11,32 @@ from app.models.audit_log import AuditLog
 from app.models.chat import ChatRoom, Message
 from app.models.category import Category
 from app.models.community import CommunityComment, CommunityPost, CommunityPostImage
-from app.models.enums import AdminActionType, ItemStatus, ReportStatus, ReportTargetType, TransactionStatus, UserStatus, WalletTransactionType
+from app.models.enums import AdminActionType, DepositRequestStatus, ItemStatus, ReportStatus, ReportTargetType, TransactionStatus, UserStatus, WalletTransactionType
 from app.models.item import Item
 from app.models.report import Report
 from app.models.transaction import Transaction
-from app.models.transfer import Transfer, Wallet, WalletLedger
+from app.models.transfer import DepositRequest, Transfer, WalletLedger
 from app.models.user import User
 from app.schemas.admin import AdminChatMessageEntry, AdminChatMessageListResponse, AdminChatRoomEntry, AdminChatRoomListResponse, AdminCommunityCommentEntry, AdminCommunityCommentListResponse, AdminCommunityPostEntry, AdminCommunityPostListResponse, AdminItemListEntry, AdminItemListResponse, AdminItemStatusUpdateRequest, AdminItemStatusUpdateResponse, AdminModerationRequest, AdminReportDetailResponse, AdminReportListEntry, AdminReportListResponse, AdminReportUpdateResponse, AdminTransactionListEntry, AdminTransactionListResponse, AdminUserListEntry, AdminUserListResponse, AdminUserStatusUpdateRequest, AdminUserStatusUpdateResponse, AuditLogEntry, AuditLogListResponse
 from app.schemas.report import AdminReportUpdateRequest
-from app.schemas.transfer import AdminWalletAdjustmentRequest, AdminWalletAdjustmentResponse, AdminWalletEntry, AdminWalletListResponse, TransferHistoryEntry, TransferListResponse
+from app.schemas.transfer import (
+    AdminDepositRequestDecisionRequest,
+    AdminDepositRequestDecisionResponse,
+    AdminWalletAdjustmentRequest,
+    AdminWalletAdjustmentResponse,
+    AdminWalletEntry,
+    AdminWalletListResponse,
+    DepositRequestEntry,
+    DepositRequestListResponse,
+    TransferHistoryEntry,
+    TransferListResponse,
+)
+from app.services.wallets import get_or_create_wallet, lock_wallets
 from app.utils.pagination import build_pagination
 
 
 router = APIRouter()
 USER_REPORT_REVIEW_THRESHOLD = 1
-INITIAL_WALLET_BALANCE = 100000
-
-
-def get_or_create_wallet(db: Session, user_id: int) -> Wallet:
-    wallet = db.scalar(select(Wallet).where(Wallet.user_id == user_id))
-    if wallet:
-        return wallet
-    wallet = Wallet(user_id=user_id, balance=INITIAL_WALLET_BALANCE)
-    db.add(wallet)
-    db.flush()
-    db.add(
-        WalletLedger(
-            wallet_id=wallet.id,
-            transaction_type=WalletTransactionType.INITIAL_CREDIT,
-            amount=INITIAL_WALLET_BALANCE,
-            balance_after=wallet.balance,
-            description="초기 테스트 잔액 지급",
-        )
-    )
-    return wallet
 
 
 def user_summary(user: User | None) -> dict | None:
@@ -59,6 +51,35 @@ def user_summary(user: User | None) -> dict | None:
         "trust_score": user.trust_score,
         "created_at": user.created_at,
     }
+
+
+def party_summary(user: User | None) -> dict | None:
+    if not user:
+        return None
+    return {"id": user.id, "nickname": user.nickname}
+
+
+def deposit_request_payload(db: Session, deposit_request: DepositRequest) -> DepositRequestEntry:
+    requester = db.get(User, deposit_request.user_id)
+    reviewer = db.get(User, deposit_request.reviewed_by_admin_id) if deposit_request.reviewed_by_admin_id else None
+    return DepositRequestEntry(
+        id=deposit_request.id,
+        user=party_summary(requester),
+        amount=deposit_request.amount,
+        status=deposit_request.status,
+        created_at=deposit_request.created_at,
+        reviewed_at=deposit_request.reviewed_at,
+        reviewed_by_admin=party_summary(reviewer),
+    )
+
+
+def deposit_request_sort_key(entry: DepositRequest) -> tuple[int, datetime]:
+    priority = {
+        DepositRequestStatus.PENDING: 0,
+        DepositRequestStatus.APPROVED: 1,
+        DepositRequestStatus.REJECTED: 2,
+    }
+    return (priority.get(entry.status, 9), -entry.created_at.timestamp())
 
 
 def get_pending_user_report_count(db: Session, user_id: int) -> int:
@@ -270,6 +291,12 @@ def user_detail_payload(db: Session, user_id: int) -> dict:
         .order_by(ChatRoom.created_at.desc())
         .limit(10)
     ).all()
+    deposit_requests = db.scalars(
+        select(DepositRequest)
+        .where(DepositRequest.user_id == user.id)
+        .order_by(DepositRequest.created_at.desc())
+        .limit(10)
+    ).all()
     wallet = get_or_create_wallet(db, user.id)
     pending_report_count = get_pending_user_report_count(db, user.id)
     return {
@@ -280,6 +307,7 @@ def user_detail_payload(db: Session, user_id: int) -> dict:
         "report_count": pending_report_count,
         "needs_review": pending_report_count >= USER_REPORT_REVIEW_THRESHOLD,
         "wallet": {"balance": wallet.balance, "updated_at": wallet.updated_at},
+        "deposit_requests": [deposit_request_payload(db, entry).model_dump() for entry in deposit_requests],
         "reports": report_entries_for_target(db, ReportTargetType.USER, user.id),
         "items": [
             {
@@ -977,6 +1005,122 @@ def list_admin_wallets(
     return {"wallets": payload, "pagination": build_pagination(page, size, total_count)}
 
 
+@router.get("/deposit-requests", response_model=DepositRequestListResponse)
+def list_admin_deposit_requests(
+    status: DepositRequestStatus | None = None,
+    page: int = 1,
+    size: int = 20,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    ensure_page_size(page, size)
+    stmt = select(DepositRequest)
+    if status:
+        stmt = stmt.where(DepositRequest.status == status)
+    total_count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    requests = db.scalars(stmt.order_by(DepositRequest.created_at.desc()).offset((page - 1) * size).limit(size)).all()
+    requests.sort(key=deposit_request_sort_key)
+    return {
+        "requests": [deposit_request_payload(db, entry) for entry in requests],
+        "pagination": build_pagination(page, size, total_count),
+    }
+
+
+@router.get("/deposit-requests/{request_id}", response_model=DepositRequestEntry)
+def get_admin_deposit_request_detail(
+    request_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    deposit_request = db.get(DepositRequest, request_id)
+    if not deposit_request:
+        raise HTTPException(status_code=404, detail="DEPOSIT_REQUEST_NOT_FOUND")
+    return deposit_request_payload(db, deposit_request)
+
+
+@router.patch("/deposit-requests/{request_id}/approve", response_model=AdminDepositRequestDecisionResponse)
+def approve_admin_deposit_request(
+    request_id: int,
+    payload: AdminDepositRequestDecisionRequest,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    deposit_request = db.scalar(
+        select(DepositRequest).where(DepositRequest.id == request_id).with_for_update()
+    )
+    if not deposit_request:
+        raise HTTPException(status_code=404, detail="DEPOSIT_REQUEST_NOT_FOUND")
+    if deposit_request.status != DepositRequestStatus.PENDING:
+        raise HTTPException(status_code=409, detail="DEPOSIT_REQUEST_ALREADY_PROCESSED")
+
+    wallet = lock_wallets(db, [deposit_request.user_id])[deposit_request.user_id]
+    wallet.balance += deposit_request.amount
+    db.add(wallet)
+    db.flush()
+    db.add(
+        WalletLedger(
+            wallet_id=wallet.id,
+            transaction_type=WalletTransactionType.DEPOSIT_APPROVED,
+            amount=deposit_request.amount,
+            balance_after=wallet.balance,
+            description="관리자 승인 충전",
+        )
+    )
+
+    deposit_request.status = DepositRequestStatus.APPROVED
+    deposit_request.reviewed_at = datetime.utcnow()
+    deposit_request.reviewed_by_admin_id = admin_user.id
+    db.add(deposit_request)
+    record_audit_log(db, admin_user.id, "APPROVE_DEPOSIT_REQUEST", "DEPOSIT_REQUEST", deposit_request.id, payload.reason or "충전 승인")
+    db.commit()
+    db.refresh(wallet)
+    db.refresh(deposit_request)
+    return AdminDepositRequestDecisionResponse(
+        id=deposit_request.id,
+        status=deposit_request.status,
+        amount=deposit_request.amount,
+        balance=wallet.balance,
+        reviewed_at=deposit_request.reviewed_at,
+        reviewed_by_admin=party_summary(admin_user),
+        reason=payload.reason,
+    )
+
+
+@router.patch("/deposit-requests/{request_id}/reject", response_model=AdminDepositRequestDecisionResponse)
+def reject_admin_deposit_request(
+    request_id: int,
+    payload: AdminDepositRequestDecisionRequest,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    deposit_request = db.scalar(
+        select(DepositRequest).where(DepositRequest.id == request_id).with_for_update()
+    )
+    if not deposit_request:
+        raise HTTPException(status_code=404, detail="DEPOSIT_REQUEST_NOT_FOUND")
+    if deposit_request.status != DepositRequestStatus.PENDING:
+        raise HTTPException(status_code=409, detail="DEPOSIT_REQUEST_ALREADY_PROCESSED")
+
+    wallet = get_or_create_wallet(db, deposit_request.user_id)
+    deposit_request.status = DepositRequestStatus.REJECTED
+    deposit_request.reviewed_at = datetime.utcnow()
+    deposit_request.reviewed_by_admin_id = admin_user.id
+    db.add(deposit_request)
+    record_audit_log(db, admin_user.id, "REJECT_DEPOSIT_REQUEST", "DEPOSIT_REQUEST", deposit_request.id, payload.reason or "충전 거절")
+    db.commit()
+    db.refresh(wallet)
+    db.refresh(deposit_request)
+    return AdminDepositRequestDecisionResponse(
+        id=deposit_request.id,
+        status=deposit_request.status,
+        amount=deposit_request.amount,
+        balance=wallet.balance,
+        reviewed_at=deposit_request.reviewed_at,
+        reviewed_by_admin=party_summary(admin_user),
+        reason=payload.reason,
+    )
+
+
 @router.patch("/wallets/{user_id}/adjust", response_model=AdminWalletAdjustmentResponse)
 def adjust_admin_wallet_balance(
     user_id: int,
@@ -987,7 +1131,7 @@ def adjust_admin_wallet_balance(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
-    wallet = get_or_create_wallet(db, user.id)
+    wallet = lock_wallets(db, [user.id])[user.id]
     next_balance = wallet.balance + payload.amount
     if next_balance < 0:
         raise HTTPException(status_code=409, detail="INSUFFICIENT_BALANCE")
